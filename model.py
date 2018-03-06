@@ -8,12 +8,12 @@ from torch.autograd import Variable
 
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size):
-        """Load the pretrained ResNet-152 and replace top fc layer."""
+        """Load the pretrained VGG16 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
-        resnet = models.resnet152(pretrained=True)
-        modules = list(resnet.children())[:-1]      # delete the last fc layer.
-        self.resnet = nn.Sequential(*modules)
-        self.linear = nn.Linear(resnet.fc.in_features, embed_size)
+        vgg16 = models.vgg16(pretrained=True)
+        modules = list(vgg16.children())[:-1]      # delete the last fc layer.
+        self.vgg16 = nn.Sequential(*modules)
+        self.linear = nn.Linear(vgg16.fc.in_features, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
         self.init_weights()
         
@@ -24,7 +24,7 @@ class EncoderCNN(nn.Module):
         
     def forward(self, images):
         """Extract the image feature vectors."""
-        features = self.resnet(images)
+        features = self.vgg16(images)
         features = Variable(features.data)
         features = features.view(features.size(0), -1)
         features = self.bn(self.linear(features))
