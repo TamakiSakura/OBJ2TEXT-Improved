@@ -1,6 +1,5 @@
-# Trained Model File
-*.weights.*
-
+# Created by .ignore support plugin (hsz.mobi)
+### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -46,7 +45,7 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
-*.cover
+*,cover
 .hypothesis/
 
 # Translations
@@ -92,13 +91,15 @@ ENV/
 
 # Spyder project settings
 .spyderproject
-.spyproject
 
 # Rope project settings
 .ropeproject
+.idea
 
-# mkdocs documentation
-/site
+*.o
+models
+models/*
+data/*
 
-# mypy
-.mypy_cache/
+VOCdevkit/*
+src/*
