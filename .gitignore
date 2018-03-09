@@ -1,5 +1,6 @@
 # Trained Model File
 *.weights.*
+models/
 
 # Data
 data/

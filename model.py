@@ -129,6 +129,6 @@ class DecoderRNN(nn.Module):
             outputs = self.linear(hiddens.squeeze(1))            # (batch_size, vocab_size)
             predicted = outputs.max(1)[1]
             sampled_ids.append(predicted)
-            inputs = self.embed(predicted)
-        sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
+            inputs = self.embed(predicted).unsqueeze(1)
+        sampled_ids = torch.cat(sampled_ids, 0)                  # (batch_size, 20)
         return sampled_ids.squeeze()
