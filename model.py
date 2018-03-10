@@ -11,10 +11,9 @@ class EncoderCNN(nn.Module):
         """Load the pretrained VGG16 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
         vgg16 = models.vgg16(pretrained=True)
-        # TODO: This implementation is incorrect
-        modules = list(vgg16.children())[:-1]      # delete the last fc layer.
-        self.vgg16 = nn.Sequential(*modules)
-        self.linear = nn.Linear(vgg16.fc.in_features, embed_size)
+        self.vgg16_feat = vgg16.features
+        self.vgg16_clf = nn.Sequential(*list(vgg16.classifier.children())[:-1])
+        self.linear = nn.Linear(4096, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
         self.init_weights()
         
@@ -25,9 +24,9 @@ class EncoderCNN(nn.Module):
         
     def forward(self, images):
         """Extract the image feature vectors."""
-        features = self.vgg16(images)
-        features = Variable(features.data)
+        features = self.vgg16_feat(images)
         features = features.view(features.size(0), -1)
+        features = self.vgg16_clf(features)
         features = self.bn(self.linear(features))
         return features
 

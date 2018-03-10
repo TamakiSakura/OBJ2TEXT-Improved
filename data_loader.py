@@ -147,6 +147,7 @@ def encode_location(bboxs, img_w, img_h):
         h = int(h * h_ratio)
         locations.append(x * 1e9 + y * 1e6 + w * 1e3 + h)
     return locations
+
 def decode_location(location):
     x = location // 1e9
     y = (location % 1e9) // 1e6
