@@ -11,6 +11,7 @@ class EncoderCNN(nn.Module):
         """Load the pretrained VGG16 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
         vgg16 = models.vgg16(pretrained=True)
+        # TODO: This implementation is incorrect
         modules = list(vgg16.children())[:-1]      # delete the last fc layer.
         self.vgg16 = nn.Sequential(*modules)
         self.linear = nn.Linear(vgg16.fc.in_features, embed_size)

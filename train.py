@@ -79,7 +79,10 @@ def main(args):
             encoder.zero_grad()
             features = encoder(images)
             layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
+            
+            # Modify This part for using visual features or not
             comb_features = features + layout_encoding
+
             outputs = decoder(comb_features, captions, lengths)
             loss = criterion(outputs, targets)
             loss.backward()
@@ -115,7 +118,7 @@ if __name__ == '__main__':
                         default='./data/annotations/captions_train2014.json',
                         help='path for train annotation json file')
     parser.add_argument('--coco_detection_result', type=str,
-                        default='./data/coco_yolo_objname_location.json',
+                        default='./data/annotations/instances_train2014.json',
                         help='path coco object detection result file')
     parser.add_argument('--log_step', type=int, default=10,
                         help='step size for prining log info')

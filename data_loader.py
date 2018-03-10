@@ -14,7 +14,8 @@ import json
 
 class CocoDataset(data.Dataset):
     """COCO Custom Dataset compatible with torch.utils.data.DataLoader."""
-    def __init__(self, root, coco_annotation, vocab, coco_detection_result, transform=None):
+    def __init__(self, root, coco_annotation, vocab, coco_detection_result, 
+                 transform=None, yolo=False):
         """Set the path for images, captions and vocabulary wrapper.
         
         Args:
@@ -28,10 +29,25 @@ class CocoDataset(data.Dataset):
         self.ids = list(self.coco.anns.keys())
         self.vocab = vocab
         self.transform = transform
-        with open(coco_detection_result, 'r') as f:
-            self.detection_results = json.load(f)
-        self.locations = {result['id']: result['bboxes'] for result in self.detection_results}
-        self.labels = {result['id']: result['full_categories'] for result in self.detection_results}
+        self.yolo = yolo
+
+        if self.yolo:
+            with open(coco_detection_result, 'r') as f:
+                self.detection_results = json.load(f)
+            self.locations = {result['id']: result['bboxes'] for result in self.detection_results}
+            self.labels = {result['id']: result['full_categories'] for result in self.detection_results}
+        else:
+            self.coco_obj = COCO(coco_detection_result)
+            self.locations = {}
+            self.labels = {}
+            for key in self.coco_obj.anns.keys():
+                img_id = self.coco_obj.anns[key]['image_id']
+                if self.labels.get(img_id):
+                    self.labels[img_id].append(self.coco_obj.anns[key]['category_id']) 
+                    self.locations[img_id].append(self.coco_obj.anns[key]['bbox'])
+                else:
+                    self.labels[img_id] = [self.coco_obj.anns[key]['category_id']]
+                    self.locations[img_id] = [self.coco_obj.anns[key]['bbox']]
 
     def __getitem__(self, index):
         """Returns one data pair (image and caption)."""
@@ -56,7 +72,12 @@ class CocoDataset(data.Dataset):
         target = torch.Tensor(caption)
 
         labels = self.labels[img_id]
-        locations = self.locations[img_id]
+        if self.yolo:
+            locations = self.locations[img_id]
+        else:
+            details = self.coco_obj.loadImgs(img_id)[0]
+            locations = encode_location(self.locations[img_id], 
+                                        details['width'], details['height'])
         if len(labels) != len(locations):
             raise ValueError("number of labels nust be equal to number of locations")
         if len(labels) == 0:
@@ -114,6 +135,18 @@ def collate_fn(data):
     return images, targets, lengths, label_seq_data, location_seq_data, label_seq_lengths
 
 
+def encode_location(bboxs, img_w, img_h):
+    locations = []
+    for bbox in bboxs:
+        x, y, w, h = bbox
+        w_ratio = 608 / float(img_w)
+        h_ratio = 608 / float(img_h)
+        x = int(x * w_ratio)
+        w = int(w * w_ratio)
+        y = int(y * h_ratio)
+        h = int(h * h_ratio)
+        locations.append(x * 1e9 + y * 1e6 + w * 1e3 + h)
+    return locations
 def decode_location(location):
     x = location // 1e9
     y = (location % 1e9) // 1e6
