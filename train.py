@@ -69,14 +69,15 @@ def main(args):
         for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
 
             # Set mini-batch dataset
-            images = to_var(images, volatile=True)
+            images = to_var(images)
             captions = to_var(captions)
             targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
 
             # Forward, Backward and Optimize
-            decoder.zero_grad()
-            layout_encoder.zero_grad()
-            encoder.zero_grad()
+            # decoder.zero_grad()
+            # layout_encoder.zero_grad()
+            # encoder.zero_grad()
+             
             features = encoder(images)
             layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
             
@@ -84,7 +85,9 @@ def main(args):
             comb_features = features + layout_encoding
 
             outputs = decoder(comb_features, captions, lengths)
+            
             loss = criterion(outputs, targets)
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 

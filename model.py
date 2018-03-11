@@ -13,6 +13,8 @@ class EncoderCNN(nn.Module):
         vgg16 = models.vgg16(pretrained=True)
         self.vgg16_feat = vgg16.features
         self.vgg16_clf = nn.Sequential(*list(vgg16.classifier.children())[:-1])
+        self.vgg16_feat.eval()
+        self.vgg16_clf.eval()
         self.linear = nn.Linear(4096, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
         self.init_weights()
