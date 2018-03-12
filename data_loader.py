@@ -70,14 +70,18 @@ class CocoDataset(data.Dataset):
         caption.extend([vocab(token) for token in tokens])
         caption.append(vocab('<end>'))
         target = torch.Tensor(caption)
-
-        labels = self.labels[img_id]
-        if self.yolo:
-            locations = self.locations[img_id]
+        
+        labels = self.labels.get(img_id)
+        if labels is None:
+            labels = []
+            locations = []
         else:
-            details = self.coco_obj.loadImgs(img_id)[0]
-            locations = encode_location(self.locations[img_id], 
-                                        details['width'], details['height'])
+            if self.yolo:
+                locations = self.locations[img_id]
+            else:
+                details = self.coco_obj.loadImgs(img_id)[0]
+                locations = encode_location(self.locations[img_id], 
+                                            details['width'], details['height'])
         if len(labels) != len(locations):
             raise ValueError("number of labels nust be equal to number of locations")
         if len(labels) == 0:

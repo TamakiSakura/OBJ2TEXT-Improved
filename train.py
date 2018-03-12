@@ -77,12 +77,13 @@ def main(args):
             # decoder.zero_grad()
             # layout_encoder.zero_grad()
             # encoder.zero_grad()
-             
-            features = encoder(images)
-            layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
             
             # Modify This part for using visual features or not
-            comb_features = features + layout_encoding
+             
+            # features = encoder(images)
+            layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
+            # comb_features = features + layout_encoding
+            comb_features = layout_encoding
 
             outputs = decoder(comb_features, captions, lengths)
             
@@ -139,7 +140,7 @@ if __name__ == '__main__':
                         help='number of layers in lstm')
 
     parser.add_argument('--num_epochs', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--seed', type=int, default=123, help='random generator seed')
