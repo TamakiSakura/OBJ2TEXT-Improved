@@ -69,19 +69,26 @@ def main(args):
         for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
 
             # Set mini-batch dataset
-            images = to_var(images, volatile=True)
+            images = to_var(images)
             captions = to_var(captions)
             targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
 
             # Forward, Backward and Optimize
-            decoder.zero_grad()
-            layout_encoder.zero_grad()
-            encoder.zero_grad()
-            features = encoder(images)
+            # decoder.zero_grad()
+            # layout_encoder.zero_grad()
+            # encoder.zero_grad()
+            
+            # Modify This part for using visual features or not
+             
+            # features = encoder(images)
             layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
-            comb_features = features + layout_encoding
+            # comb_features = features + layout_encoding
+            comb_features = layout_encoding
+
             outputs = decoder(comb_features, captions, lengths)
+            
             loss = criterion(outputs, targets)
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -115,7 +122,7 @@ if __name__ == '__main__':
                         default='./data/annotations/captions_train2014.json',
                         help='path for train annotation json file')
     parser.add_argument('--coco_detection_result', type=str,
-                        default='./data/coco_yolo_objname_location.json',
+                        default='./data/annotations/instances_train2014.json',
                         help='path coco object detection result file')
     parser.add_argument('--log_step', type=int, default=10,
                         help='step size for prining log info')
@@ -133,7 +140,7 @@ if __name__ == '__main__':
                         help='number of layers in lstm')
 
     parser.add_argument('--num_epochs', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--seed', type=int, default=123, help='random generator seed')

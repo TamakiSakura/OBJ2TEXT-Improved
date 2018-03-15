@@ -5,16 +5,17 @@ from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.autograd import Variable
 
-# File That Implement the Goolge Transformer Model
 
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size):
         """Load the pretrained VGG16 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
         vgg16 = models.vgg16(pretrained=True)
-        modules = list(vgg16.children())[:-1]      # delete the last fc layer.
-        self.vgg16 = nn.Sequential(*modules)
-        self.linear = nn.Linear(vgg16.fc.in_features, embed_size)
+        self.vgg16_feat = vgg16.features
+        self.vgg16_clf = nn.Sequential(*list(vgg16.classifier.children())[:-1])
+        self.vgg16_feat.eval()
+        self.vgg16_clf.eval()
+        self.linear = nn.Linear(4096, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
         self.init_weights()
         
@@ -25,9 +26,9 @@ class EncoderCNN(nn.Module):
         
     def forward(self, images):
         """Extract the image feature vectors."""
-        features = self.vgg16(images)
-        features = Variable(features.data)
+        features = self.vgg16_feat(images)
         features = features.view(features.size(0), -1)
+        features = self.vgg16_clf(features)
         features = self.bn(self.linear(features))
         return features
 
@@ -130,6 +131,6 @@ class DecoderRNN(nn.Module):
             outputs = self.linear(hiddens.squeeze(1))            # (batch_size, vocab_size)
             predicted = outputs.max(1)[1]
             sampled_ids.append(predicted)
-            inputs = self.embed(predicted)
-        sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
+            inputs = self.embed(predicted).unsqueeze(1)
+        sampled_ids = torch.cat(sampled_ids, 0)                  # (batch_size, 20)
         return sampled_ids.squeeze()
