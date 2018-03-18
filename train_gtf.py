@@ -6,7 +6,7 @@ import os
 import pickle
 from data_loader import get_loader
 from build_vocab import Vocabulary
-from model import EncoderCNN, DecoderRNN, LayoutEncoder
+from model_gtf import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
@@ -43,7 +43,9 @@ def main(args):
     # Build data loader
     data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.coco_detection_result,
                              transform, args.batch_size,
-                             shuffle=True, num_workers=args.num_workers)
+                             shuffle=True, num_workers=args.num_workers,
+                             dummy_object=1)
+    # TODO: A better way to deal with zero out
 
     # Build the models
     encoder = EncoderCNN(args.embed_size)
@@ -71,6 +73,8 @@ def main(args):
             # Set mini-batch dataset
             images = to_var(images)
             captions = to_var(captions)
+            label_seqs = to_var(label_seqs)
+            location_seqs = to_var(location_seqs)
             targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
 
             # Forward, Backward and Optimize
@@ -85,7 +89,7 @@ def main(args):
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
 
-            outputs = decoder(comb_features, captions, lengths)
+            outputs = decoder(label_seqs, captions, comb_features, lengths)
             
             loss = criterion(outputs, targets)
             optimizer.zero_grad()
@@ -97,6 +101,10 @@ def main(args):
                 print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Perplexity: %5.4f'
                       % (epoch, args.num_epochs, i, total_step,
                          loss.data[0], np.exp(loss.data[0])))
+                if str(loss.data[0]) == "nan":
+                    print(label_seqs)
+                    print(comb_features)
+                    print(outputs)
 
                 # Save the models
             if (i + 1) % args.save_step == 0:
