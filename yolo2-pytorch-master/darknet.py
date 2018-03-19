@@ -298,4 +298,4 @@ class Darknet19(nn.Module):
 if __name__ == '__main__':
     net = Darknet19()
     # net.load_from_npz('models/yolo-voc.weights.npz')
-    net.load_from_npz('models/darknet19.weights.npz', num_conv=1)
+    net.load_from_npz('models/darknet19.weights.npz', num_conv=18)
