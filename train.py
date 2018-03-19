@@ -170,9 +170,11 @@ def main(args):
                 torch.save(decoder.state_dict(),
                            os.path.join(args.model_path,
                                         'decoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+
                 torch.save(layout_encoder.state_dict(),
                            os.path.join(args.model_path,
                                         'layout_encoding-%d-%d.pkl' % (epoch + 1, i + 1)))
+
 
 
     validation(encoder,layout_encoder,decoder, args,vocab,transform,args.batch_size)

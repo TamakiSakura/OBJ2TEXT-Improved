@@ -4,7 +4,10 @@ import torchvision.models as models
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.autograd import Variable
-
+import transformer.Constants as Constants
+from transformer.Utils import *
+from transformer.Modules import BottleLinear as Linear
+from transformer.Layers import EncoderLayer, DecoderLayer
 
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size):
@@ -34,13 +37,24 @@ class EncoderCNN(nn.Module):
 
 
 class LayoutEncoder(nn.Module):
-    def __init__(self, layout_encoding_size, hidden_size, vocab_size, num_layers):
+    def __init__(self, layout_encoding_size, hidden_size, vocab_size, num_layers, 
+                 n_head=8, d_k=64, d_v=64, d_inner_hid=1024, 
+                 dropout=0.1):
         """Set the hyper-parameters and build the layers."""
         super(LayoutEncoder, self).__init__()
+        d_word_vec = layout_encoding_size
+        d_model = layout_encoding_size
+        
         self.label_encoder = nn.Embedding(vocab_size, layout_encoding_size)
         self.location_encoder = nn.Linear(4, layout_encoding_size)
-        self.lstm = nn.LSTM(layout_encoding_size, hidden_size, num_layers, batch_first=True)
+        
         self.init_weights()
+
+        self.layer_stack = nn.ModuleList([
+                           EncoderLayer(
+                           d_model, d_inner_hid, n_head, 
+                           d_k, d_v, dropout=dropout)
+                           for _ in range(num_layers)])
 
     def init_weights(self):
         """Initialize weights."""
@@ -49,81 +63,88 @@ class LayoutEncoder(nn.Module):
         self.location_encoder.bias.data.fill_(0)
 
     def forward(self, label_seqs, location_seqs, lengths):
-        # sort label sequences and location sequences in batch dimension according to length
-        batch_idx = sorted(range(len(lengths)), key=lambda k: lengths[k], reverse=True)
-        reverse_batch_idx = torch.LongTensor([batch_idx.index(i) for i in range(len(batch_idx))])
-
-        lens_sorted = sorted(lengths, reverse=True)
-        label_seqs_sorted = torch.index_select(label_seqs, 0, torch.LongTensor(batch_idx))
-        location_seqs_sorted = torch.index_select(location_seqs, 0, torch.LongTensor(batch_idx))
-
-        # assert torch.equal(torch.index_select(label_seqs_sorted, 0, reverse_batch_idx), label_seqs)
-        # assert torch.equal(torch.index_select(location_seqs_sorted, 0, reverse_batch_idx), location_seqs)
-
-        if torch.cuda.is_available():
-            reverse_batch_idx = reverse_batch_idx.cuda()
-            label_seqs_sorted = label_seqs_sorted.cuda()
-            location_seqs_sorted = location_seqs_sorted.cuda()
-
-        # create Variables
-        label_seqs_sorted_var = Variable(label_seqs_sorted, requires_grad=False)
-        location_seqs_sorted_var = Variable(location_seqs_sorted, requires_grad=False)
-
+        """Encode the Layout"""
         # encode label sequences
-        label_encoding = self.label_encoder(label_seqs_sorted_var)
-
+        label_encoding = self.label_encoder(label_seqs)
+        
         # encode location sequences
-        location_seqs_sorted_var = location_seqs_sorted_var.view(-1, 4)
-        location_encoding = self.location_encoder(location_seqs_sorted_var)
+        location_encoding = self.location_encoder(location_seqs.view(-1, 4))
         location_encoding = location_encoding.view(label_encoding.size(0), -1, location_encoding.size(1))
 
         # layout encoding - batch_size x max_seq_len x embed_size
         layout_encoding = label_encoding + location_encoding
-        packed = pack(layout_encoding, lens_sorted, batch_first=True)
-        hiddens, _ = self.lstm(packed)
 
-        # unpack hiddens and get last hidden vector
-        hiddens_unpack = unpack(hiddens, batch_first=True)[0]  # batch_size x max_seq_len x embed_size
-        last_hidden_idx = torch.zeros(hiddens_unpack.size(0), 1, hiddens_unpack.size(2)).long()
-        for i in range(hiddens_unpack.size(0)):
-            last_hidden_idx[i, 0, :] = lens_sorted[i] - 1
-        if torch.cuda.is_available():
-            last_hidden_idx = last_hidden_idx.cuda()
-        last_hidden = torch.gather(hiddens_unpack, 1, Variable(last_hidden_idx, requires_grad=False))  # batch_size x 1 x embed_size
-        last_hidden = torch.squeeze(last_hidden, 1)  # batch_size x embed_size
+        enc_output = layout_encoding
 
-        # convert back to original batch order
-        last_hidden = torch.index_select(last_hidden, 0, Variable(reverse_batch_idx, requires_grad=False))
+        enc_slf_attn_mask = get_attn_padding_mask(label_seqs, 
+                                                  label_seqs)
+        for enc_layer in self.layer_stack:
+            enc_output, enc_slf_attn = enc_layer(
+                enc_output, slf_attn_mask=enc_slf_attn_mask)
 
-        return last_hidden
-    
+        return enc_output
     
 class DecoderRNN(nn.Module):
-    def __init__(self, embed_size, hidden_size, vocab_size, num_layers):
+    def __init__(self, embed_size, hidden_size, vocab_size, num_layers,
+                 n_max_seq=50, 
+                 n_head=8, d_k=64, d_v=64, d_inner_hid=1024, 
+                 dropout=0.1):
         """Set the hyper-parameters and build the layers."""
         super(DecoderRNN, self).__init__()
-        self.embed = nn.Embedding(vocab_size, embed_size)
-        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
-        self.linear = nn.Linear(hidden_size, vocab_size)
-        self.init_weights()
-    
-    def init_weights(self):
-        """Initialize weights."""
-        self.embed.weight.data.uniform_(-0.1, 0.1)
-        self.linear.weight.data.uniform_(-0.1, 0.1)
-        self.linear.bias.data.fill_(0)
+        self.tgt_word_emb = nn.Embedding(vocab_size, embed_size, Constants.PAD)
         
-    def forward(self, features, captions, lengths):
-        """Decode image feature vectors and generates captions."""
-        embeddings = self.embed(captions)
-        embeddings = torch.cat((features.unsqueeze(1), embeddings), 1)
-        packed = pack(embeddings, lengths, batch_first=True)
-        hiddens, _ = self.lstm(packed)
-        outputs = self.linear(hiddens[0])
-        return outputs
+        n_position = n_max_seq + 1
+        self.n_max_seq = n_max_seq
+  
+        d_model = embed_size
+        d_word_vec = embed_size
+
+        self.d_model = d_model
+
+        self.position_enc = nn.Embedding(
+            n_position, d_word_vec, padding_idx=Constants.PAD)
+        self.position_enc.weight.data = position_encoding_init(n_position, d_word_vec)
+        self.dropout = nn.Dropout(dropout)
+
+        self.layer_stack = nn.ModuleList([
+            DecoderLayer(d_model, d_inner_hid, n_head, d_k, d_v, dropout=dropout)
+            for _ in range(num_layers)])
+
+        self.linear = nn.Linear(embed_size, vocab_size)
+        self.linear.weight.data.uniform_(-0.1, 0.1)
+        self.linear.bias.data.fill_(0)         
+
+    def forward(self, src_seq, tgt_seq, enc_output, length):
+        """Decode the input into sentence"""
+        # Word embedding look up
+        dec_input = self.tgt_word_emb(tgt_seq)
+
+        # Position Encoding addition
+        # dec_input += self.position_enc(tgt_seq)
+        # TODO: UNIMPLEMENTED
+
+        # Decode
+        dec_slf_attn_pad_mask = get_attn_padding_mask(tgt_seq, tgt_seq)
+        dec_slf_attn_sub_mask = get_attn_subsequent_mask(tgt_seq)
+        dec_slf_attn_mask = torch.gt(dec_slf_attn_pad_mask + dec_slf_attn_sub_mask, 0)
+
+        dec_enc_attn_pad_mask = get_attn_padding_mask(tgt_seq, src_seq)
+        
+        dec_output = dec_input
+        for dec_layer in self.layer_stack:
+            dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
+                dec_output, enc_output,
+                slf_attn_mask=dec_slf_attn_mask,
+                dec_enc_attn_mask=dec_enc_attn_pad_mask)
+        
+        output = self.linear(dec_output)
+        output = pack(output, length, batch_first=True).data
+        
+        return output
     
     def sample(self, features, states=None):
         """Samples captions for given image features (Greedy search)."""
+        # TODO INCORRECT
         sampled_ids = []
         inputs = features.unsqueeze(1)
         for i in range(20):                                      # maximum sampling length

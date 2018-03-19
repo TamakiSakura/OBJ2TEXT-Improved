@@ -15,7 +15,7 @@ import json
 class CocoDataset(data.Dataset):
     """COCO Custom Dataset compatible with torch.utils.data.DataLoader."""
     def __init__(self, root, coco_annotation, vocab, coco_detection_result, 
-                 transform=None, yolo=False):
+                 transform=None, yolo=False, dummy_object=0):
         """Set the path for images, captions and vocabulary wrapper.
         
         Args:
@@ -30,6 +30,7 @@ class CocoDataset(data.Dataset):
         self.vocab = vocab
         self.transform = transform
         self.yolo = yolo
+        self.dummy_object = dummy_object
 
         if self.yolo:
             with open(coco_detection_result, 'r') as f:
@@ -85,8 +86,8 @@ class CocoDataset(data.Dataset):
         if len(labels) != len(locations):
             raise ValueError("number of labels nust be equal to number of locations")
         if len(labels) == 0:
-            labels = [0]
-            locations = [0]
+            labels = [self.dummy_object]
+            locations = encode_location([(0,0,100,100)], 100, 100)
         return image, target, labels, locations
 
     def __len__(self):
@@ -159,14 +160,15 @@ def decode_location(location):
     height = location % 1e3
     return torch.Tensor((x / 608, y / 608, width / 608, height / 608))
 
-def get_loader(root, coco_annotation, vocab, coco_detection_result, transform, batch_size, shuffle, num_workers):
+def get_loader(root, coco_annotation, vocab, coco_detection_result, transform, batch_size, shuffle, num_workers, dummy_object=0):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
     # COCO caption dataset
     coco = CocoDataset(root=root,
                        coco_annotation=coco_annotation,
                        vocab=vocab,
                        coco_detection_result=coco_detection_result,
-                       transform=transform)
+                       transform=transform,
+                       dummy_object=dummy_object)
     
     # Data loader for COCO dataset
     # This will return (images, captions, lengths) for every iteration.
