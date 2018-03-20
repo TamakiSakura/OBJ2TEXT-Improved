@@ -8,6 +8,7 @@ import transformer.Constants as Constants
 from transformer.Utils import *
 from transformer.Modules import BottleLinear as Linear
 from transformer.Layers import EncoderLayer, DecoderLayer
+from transformer.Beam import Beam
 
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size):
@@ -98,7 +99,7 @@ class DecoderRNN(nn.Module):
   
         d_model = embed_size
         d_word_vec = embed_size
-
+        
         self.d_model = d_model
 
         self.position_enc = nn.Embedding(
@@ -114,7 +115,7 @@ class DecoderRNN(nn.Module):
         self.linear.weight.data.uniform_(-0.1, 0.1)
         self.linear.bias.data.fill_(0)         
 
-    def forward(self, src_seq, tgt_seq, enc_output, length):
+    def forward(self, src_seq, tgt_seq, enc_output, length, flat=True):
         """Decode the input into sentence"""
         # Word embedding look up
         dec_input = self.tgt_word_emb(tgt_seq)
@@ -138,20 +139,127 @@ class DecoderRNN(nn.Module):
                 dec_enc_attn_mask=dec_enc_attn_pad_mask)
         
         output = self.linear(dec_output)
-        output = pack(output, length, batch_first=True).data
+        if flat:
+            output = pack(output, length, batch_first=True).data
         
         return output
     
-    def sample(self, features, states=None):
+    def sample(self, src_seq, enc_output):
         """Samples captions for given image features (Greedy search)."""
-        # TODO INCORRECT
-        sampled_ids = []
-        inputs = features.unsqueeze(1)
-        for i in range(20):                                      # maximum sampling length
-            hiddens, states = self.lstm(inputs, states)          # (batch_size, 1, hidden_size), 
-            outputs = self.linear(hiddens.squeeze(1))            # (batch_size, vocab_size)
-            predicted = outputs.max(1)[1]
-            sampled_ids.append(predicted)
-            inputs = self.embed(predicted).unsqueeze(1)
-        sampled_ids = torch.cat(sampled_ids, 0)                  # (batch_size, 20)
-        return sampled_ids.squeeze()
+        beam_size = 1
+        batch_size = src_seq.size(0)
+
+        self.softmax = nn.LogSoftmax()        
+        self.tt = torch.cuda if torch.cuda.is_available() else torch
+         
+        # Repeat Data
+        src_seq = Variable(
+            src_seq.data.repeat(1, beam_size).view(
+                src_seq.size(0) * beam_size, src_seq.size(1)))
+
+        enc_output = Variable(
+            enc_output.data.repeat(1, beam_size, 1).view(
+                enc_output.size(0) * beam_size, enc_output.size(1), enc_output.size(2)))
+
+        #--- Prepare beams
+        beams = [Beam(beam_size, torch.cuda.is_available()) for _ in range(batch_size)]
+        beam_inst_idx_map = {
+            beam_idx: inst_idx for inst_idx, beam_idx in enumerate(range(batch_size))}
+        n_remaining_sents = batch_size
+
+        #- Decode
+        for i in range(20):
+            len_dec_seq = i + 1
+
+            # -- Preparing decoded data seq -- #
+            # size: batch x beam x seq
+            dec_partial_seq = torch.stack([
+                b.get_current_state() for b in beams if not b.done])
+            # size: (batch * beam) x seq
+            dec_partial_seq = dec_partial_seq.view(-1, len_dec_seq)
+            # wrap into a Variable
+            dec_partial_seq = Variable(dec_partial_seq, volatile=True)
+
+            if torch.cuda.is_available():
+                dec_partial_seq = dec_partial_seq.cuda()
+
+            # -- Decoding -- #
+            dec_output = self(
+                src_seq, dec_partial_seq, enc_output, 
+                [len_dec_seq] * batch_size, False)
+            dec_output = dec_output[:, -1, :] # (batch * beam) * d_model
+            out = self.softmax(dec_output)
+
+            # batch x beam x n_words
+            word_lk = out.view(n_remaining_sents, beam_size, -1).contiguous()
+
+            active_beam_idx_list = []
+            
+            for beam_idx in range(batch_size):
+                if beams[beam_idx].done:
+                    continue
+
+                inst_idx = beam_inst_idx_map[beam_idx]
+                if not beams[beam_idx].advance(word_lk.data[inst_idx]):
+                    active_beam_idx_list += [beam_idx]
+
+            if not active_beam_idx_list:
+                # all instances have finished their path to <EOS>
+                break
+
+            # in this section, the sentences that are still active are
+            # compacted so that the decoder is not run on completed sentences
+            active_inst_idxs = self.tt.LongTensor(
+                [beam_inst_idx_map[k] for k in active_beam_idx_list])
+
+            # update the idx mapping
+            beam_inst_idx_map = {
+                beam_idx: inst_idx for inst_idx, beam_idx in enumerate(active_beam_idx_list)}
+
+            def update_active_seq(seq_var, active_inst_idxs):
+                ''' Remove the src sequence of finished instances in one batch. '''
+
+                inst_idx_dim_size, b = seq_var.size()
+                inst_idx_dim_size = inst_idx_dim_size * len(active_inst_idxs) // n_remaining_sents
+                new_size = inst_idx_dim_size, b
+
+                # select the active instances in batch
+                original_seq_data = seq_var.data.view(n_remaining_sents, -1)
+                active_seq_data = original_seq_data.index_select(0, active_inst_idxs)
+                active_seq_data = active_seq_data.view(*new_size)
+
+                return Variable(active_seq_data, volatile=True)
+
+            def update_active_enc_info(enc_info_var, active_inst_idxs):
+                ''' Remove the encoder outputs of finished instances in one batch. '''
+
+                inst_idx_dim_size, b, c = enc_info_var.size()
+                inst_idx_dim_size = inst_idx_dim_size * len(active_inst_idxs) // n_remaining_sents
+                new_size = inst_idx_dim_size, b, c
+                
+                # select the active instances in batch
+                original_enc_info_data = enc_info_var.data.view(
+                    n_remaining_sents, -1, self.d_model)
+                active_enc_info_data = original_enc_info_data.index_select(0, active_inst_idxs)
+                active_enc_info_data = active_enc_info_data.view(*new_size)
+
+                return Variable(active_enc_info_data, volatile=True)
+
+            src_seq = update_active_seq(src_seq, active_inst_idxs)
+            enc_output = update_active_enc_info(enc_output, active_inst_idxs)
+
+            #- update the remaining size
+            n_remaining_sents = len(active_inst_idxs)
+
+        #- Return useful information
+        all_hyp, all_scores = [], []
+        n_best = 1
+
+        for beam_idx in range(batch_size):
+            scores, tail_idxs = beams[beam_idx].sort_scores()
+            all_scores += [scores[:n_best]]
+
+            hyps = [beams[beam_idx].get_hypothesis(i) for i in tail_idxs[:n_best]]
+            all_hyp += [hyps]
+        
+        return all_hyp

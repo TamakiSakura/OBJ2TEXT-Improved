@@ -10,6 +10,7 @@ from model_gtf import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
+import transformer.Constants as Constants
 
 def to_var(x, volatile=False):
     if torch.cuda.is_available():
@@ -39,6 +40,7 @@ def main(args):
     # Load vocabulary wrapper.
     with open(args.vocab_path, 'rb') as f:
         vocab = pickle.load(f)
+    Constants.set_constant(vocab)
 
     # Build data loader
     data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.coco_detection_result,
@@ -89,9 +91,9 @@ def main(args):
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
 
-            outputs = decoder(label_seqs, captions, comb_features, lengths)
+            outputs = decoder(label_seqs[:-1], captions, comb_features, lengths)
             
-            loss = criterion(outputs, targets)
+            loss = criterion(outputs, targets[1:])
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -101,10 +103,6 @@ def main(args):
                 print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Perplexity: %5.4f'
                       % (epoch, args.num_epochs, i, total_step,
                          loss.data[0], np.exp(loss.data[0])))
-                if str(loss.data[0]) == "nan":
-                    print(label_seqs)
-                    print(comb_features)
-                    print(outputs)
 
                 # Save the models
             if (i + 1) % args.save_step == 0:
@@ -114,6 +112,9 @@ def main(args):
                 torch.save(encoder.state_dict(),
                            os.path.join(args.model_path,
                                         'encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+                torch.save(layout_encoder.state_dict(),
+                           os.path.join(args.model_path,
+                                        'layout_encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
 
 
 if __name__ == '__main__':
