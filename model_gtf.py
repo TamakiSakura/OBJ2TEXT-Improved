@@ -123,7 +123,7 @@ class DecoderRNN(nn.Module):
         # Position Encoding addition
         # dec_input += self.position_enc(tgt_seq)
         # TODO: UNIMPLEMENTED
-
+        
         # Decode
         dec_slf_attn_pad_mask = get_attn_padding_mask(tgt_seq, tgt_seq)
         dec_slf_attn_sub_mask = get_attn_subsequent_mask(tgt_seq)
