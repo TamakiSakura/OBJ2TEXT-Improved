@@ -134,11 +134,13 @@ def main(args):
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
         for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
+            for idx_length in range(len(lengths)):
+                lengths[idx_length] -= 1
 
             # Set mini-batch dataset
             images = to_var(images)
             captions = to_var(captions)
-            targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
+            targets = pack_padded_sequence(captions[:,1:], lengths, batch_first=True)[0]
 
             # Forward, Backward and Optimize
             # decoder.zero_grad()
@@ -152,7 +154,7 @@ def main(args):
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
 
-            outputs = decoder(comb_features, captions, lengths)
+            outputs = decoder(comb_features, captions[:,:-1], lengths)
             
             loss = criterion(outputs, targets)
             optimizer.zero_grad()

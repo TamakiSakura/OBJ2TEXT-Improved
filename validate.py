@@ -34,7 +34,9 @@ def compute_bleu(reference_sentence, predicted_sentence):
     """
     reference_tokenized = word_tokenize(reference_sentence.lower())
     predicted_tokenized = word_tokenize(predicted_sentence.lower())
-    return sentence_bleu([reference_tokenized], predicted_tokenized)
+    return sentence_bleu([reference_tokenized], 
+                         predicted_tokenized,
+                         weights=(1.0, 0.0, 0.0, 0.0))
 
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
     # Build data loader
@@ -59,7 +61,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
         for j in range(len(sampled_ids)):
             # Decode word_ids to words
             sampled_caption = []
-            sampled_id = sampled_ids[j][1:]
+            sampled_id = sampled_ids[j]
             for word_id in sampled_id:
                 word = vocab.idx2word[word_id]
                 if word == '<end>':
@@ -67,7 +69,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
                 sampled_caption.append(word)
 
             predicted_sentence = ' '.join(sampled_caption)
-            # print("predict: "+ predicted_sentence)
+            print("predict: "+ predicted_sentence)
             ref_ids = captions[j][1:-1]
             ref_captions = []
             for word_id in ref_ids:
@@ -76,7 +78,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
                     break
                 ref_captions.append(word)
             reference_sentence = ' '.join(ref_captions)
-            # print("reference: "+ reference_sentence)
+            print("reference: "+ reference_sentence)
             bleu_score_all+=compute_bleu(reference_sentence, predicted_sentence)
             bleu_score_batch+=compute_bleu(reference_sentence, predicted_sentence)
 
@@ -124,9 +126,9 @@ if __name__ == '__main__':
 
     # parser.add_argument('--encoder_path', type=str, default='./models/encoder-5-3000.pkl',
     #                     help='path for trained encoder')
-    parser.add_argument('--layout_encoder_path', type=str, default='./models/layout_encoding-1-20000.pkl',
+    parser.add_argument('--layout_encoder_path', type=str, default='./models/layout_encoding-3-10000.pkl',
                         help='path for trained encoder')
-    parser.add_argument('--decoder_path', type=str, default='./models/decoder-1-20000.pkl',
+    parser.add_argument('--decoder_path', type=str, default='./models/decoder-3-10000.pkl',
                         help='path for trained decoder')
     parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
                         help='path for vocabulary wrapper')

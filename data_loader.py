@@ -69,6 +69,8 @@ class CocoDataset(data.Dataset):
         caption = []
         caption.append(vocab('<start>'))
         caption.extend([vocab(token) for token in tokens])
+        if tokens[-1] == ".":
+            caption = caption[:-1]
         caption.append(vocab('<end>'))
         target = torch.Tensor(caption)
         
