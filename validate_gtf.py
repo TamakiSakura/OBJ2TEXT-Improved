@@ -34,7 +34,9 @@ def compute_bleu(reference_sentence, predicted_sentence):
     """
     reference_tokenized = word_tokenize(reference_sentence.lower())
     predicted_tokenized = word_tokenize(predicted_sentence.lower())
-    return sentence_bleu([reference_tokenized], predicted_tokenized)
+    return sentence_bleu([reference_tokenized], 
+                         predicted_tokenized,
+                         weights=(1.0, 0.0, 0.0, 0.0))
 
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
     # Build data loader
@@ -69,7 +71,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
                 sampled_caption.append(word)
 
             predicted_sentence = ' '.join(sampled_caption)
-            print("predict: "+ predicted_sentence)
+            #print("predict: "+ predicted_sentence)
             ref_ids = captions[j][1:-1]
             ref_captions = []
             for word_id in ref_ids:
@@ -78,9 +80,11 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
                     break
                 ref_captions.append(word)
             reference_sentence = ' '.join(ref_captions)
-            print("reference: "+ reference_sentence)
-            bleu_score_all+=compute_bleu(reference_sentence, predicted_sentence)
-            bleu_score_batch+=compute_bleu(reference_sentence, predicted_sentence)
+            #print("reference: "+ reference_sentence)
+            bleu_score_curr = compute_bleu(reference_sentence, predicted_sentence)
+            #print("curr bleu: "+ str(bleu_score_curr))
+            bleu_score_all += bleu_score_curr
+            bleu_score_batch += bleu_score_curr
 
 
         print("Validation step %d, avg bleu: %f"%(i,bleu_score_batch/batch_size))
@@ -127,9 +131,9 @@ if __name__ == '__main__':
 
     # parser.add_argument('--encoder_path', type=str, default='./models/encoder-5-3000.pkl',
     #                     help='path for trained encoder')
-    parser.add_argument('--layout_encoder_path', type=str, default='./models/layout_encoder-1-1000.pkl',
+    parser.add_argument('--layout_encoder_path', type=str, default='./models/layout_encoder-4-4000.pkl',
                         help='path for trained encoder')
-    parser.add_argument('--decoder_path', type=str, default='./models/decoder-1-1000.pkl',
+    parser.add_argument('--decoder_path', type=str, default='./models/decoder-4-4000.pkl',
                         help='path for trained decoder')
     parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
                         help='path for vocabulary wrapper')
@@ -152,14 +156,14 @@ if __name__ == '__main__':
                         default='./data/annotations/instances_val2014.json',
                         help='path coco object detection result file for valiadation')
 
-    parser.add_argument('--embed_size', type=int , default=256,
+    parser.add_argument('--embed_size', type=int , default=512,
                         help='dimension of word embedding vectors')
-    parser.add_argument('--layout_embed_size', type=int, default=256,
+    parser.add_argument('--layout_embed_size', type=int, default=512,
                         help='layout encoding size')
     parser.add_argument('--hidden_size', type=int , default=512,
                         help='dimension of lstm hidden states')
-    parser.add_argument('--num_layers', type=int , default=5 ,
-                        help='number of layers in lstm')
+    parser.add_argument('--num_layers', type=int , default=2,
+                        help='number of layers in google transformer')
 
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--learning_rate', type=float, default=0.001)
