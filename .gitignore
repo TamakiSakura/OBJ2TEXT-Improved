@@ -2,6 +2,10 @@
 *.weights.*
 models/
 
+# Vim File
+*.swp
+*.swo
+
 # Data
 data/
 

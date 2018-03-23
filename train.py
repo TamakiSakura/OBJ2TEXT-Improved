@@ -134,13 +134,10 @@ def main(args):
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
         for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
-            for idx_length in range(len(lengths)):
-                lengths[idx_length] -= 1
-
             # Set mini-batch dataset
             images = to_var(images)
             captions = to_var(captions)
-            targets = pack_padded_sequence(captions[:,1:], lengths, batch_first=True)[0]
+            targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
 
             # Forward, Backward and Optimize
             # decoder.zero_grad()
@@ -154,7 +151,7 @@ def main(args):
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
 
-            outputs = decoder(comb_features, captions[:,:-1], lengths)
+            outputs = decoder(comb_features, captions, lengths)
             
             loss = criterion(outputs, targets)
             optimizer.zero_grad()
@@ -222,7 +219,7 @@ if __name__ == '__main__':
                         help='number of layers in lstm')
 
     parser.add_argument('--num_epochs', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=20)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--seed', type=int, default=123, help='random generator seed')
