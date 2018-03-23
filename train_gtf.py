@@ -10,6 +10,7 @@ from model_gtf import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
+import transformer.Constants as Constants
 
 def to_var(x, volatile=False):
     if torch.cuda.is_available():
@@ -39,6 +40,7 @@ def main(args):
     # Load vocabulary wrapper.
     with open(args.vocab_path, 'rb') as f:
         vocab = pickle.load(f)
+    Constants.set_constant(vocab)
 
     # Build data loader
     data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.coco_detection_result,
@@ -69,13 +71,15 @@ def main(args):
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
         for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
+            for idx_length in range(len(lengths)):
+                lengths[idx_length] -= 1
 
             # Set mini-batch dataset
             images = to_var(images)
             captions = to_var(captions)
             label_seqs = to_var(label_seqs)
             location_seqs = to_var(location_seqs)
-            targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
+            targets = pack_padded_sequence(captions[:,1:], lengths, batch_first=True)[0]
 
             # Forward, Backward and Optimize
             # decoder.zero_grad()
@@ -88,9 +92,9 @@ def main(args):
             layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
-
-            outputs = decoder(label_seqs, captions, comb_features, lengths)
             
+            outputs = decoder(label_seqs, captions[:,:-1], comb_features, lengths)
+             
             loss = criterion(outputs, targets)
             optimizer.zero_grad()
             loss.backward()
@@ -101,10 +105,6 @@ def main(args):
                 print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Perplexity: %5.4f'
                       % (epoch, args.num_epochs, i, total_step,
                          loss.data[0], np.exp(loss.data[0])))
-                if str(loss.data[0]) == "nan":
-                    print(label_seqs)
-                    print(comb_features)
-                    print(outputs)
 
                 # Save the models
             if (i + 1) % args.save_step == 0:
@@ -114,6 +114,9 @@ def main(args):
                 torch.save(encoder.state_dict(),
                            os.path.join(args.model_path,
                                         'encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+                torch.save(layout_encoder.state_dict(),
+                           os.path.join(args.model_path,
+                                        'layout_encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
 
 
 if __name__ == '__main__':
@@ -144,13 +147,13 @@ if __name__ == '__main__':
                         help='layout encoding size')
     parser.add_argument('--hidden_size', type=int, default=512,
                         help='dimension of lstm hidden states')
-    parser.add_argument('--num_layers', type=int, default=1,
-                        help='number of layers in lstm')
+    parser.add_argument('--num_layers', type=int, default=5,
+                        help='number of layers in google transformer')
 
     parser.add_argument('--num_epochs', type=int, default=5)
     parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--num_workers', type=int, default=2)
-    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--seed', type=int, default=123, help='random generator seed')
     args = parser.parse_args()
     print(args)

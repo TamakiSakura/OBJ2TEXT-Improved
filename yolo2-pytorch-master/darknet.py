@@ -246,7 +246,7 @@ class Darknet19(nn.Module):
             class_mask = class_mask.expand_as(prob_pred)
             self.cls_loss = nn.MSELoss(size_average=False)(prob_pred * class_mask, _classes * class_mask) / num_boxes  # noqa
 
-        return bbox_pred, iou_pred, prob_pred
+        return bbox_pred, iou_pred, prob_pred, conv4
 
     def _build_target(self, bbox_pred_np, gt_boxes, gt_classes, dontcare,
                       iou_pred_np, size_index):
