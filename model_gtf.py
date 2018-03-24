@@ -146,7 +146,7 @@ class DecoderRNN(nn.Module):
     
     def sample(self, src_seq, enc_output):
         """Samples captions for given image features (Greedy search)."""
-        beam_size = 1
+        beam_size = 2
         batch_size = src_seq.size(0)
 
         self.softmax = nn.LogSoftmax()        

@@ -61,7 +61,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
         for j in range(len(sampled_ids)):
             # Decode word_ids to words
             sampled_caption = []
-            sampled_id = sampled_ids[j]
+            sampled_id = sampled_ids[j][1:]
             for word_id in sampled_id:
                 word = vocab.idx2word[word_id]
                 if word == '<end>':
@@ -126,9 +126,9 @@ if __name__ == '__main__':
 
     # parser.add_argument('--encoder_path', type=str, default='./models/encoder-5-3000.pkl',
     #                     help='path for trained encoder')
-    parser.add_argument('--layout_encoder_path', type=str, default='./models/layout_encoding-3-10000.pkl',
+    parser.add_argument('--layout_encoder_path', type=str, default='./models/layout_encoding-4-11000.pkl',
                         help='path for trained encoder')
-    parser.add_argument('--decoder_path', type=str, default='./models/decoder-3-10000.pkl',
+    parser.add_argument('--decoder_path', type=str, default='./models/decoder-4-11000.pkl',
                         help='path for trained decoder')
     parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
                         help='path for vocabulary wrapper')

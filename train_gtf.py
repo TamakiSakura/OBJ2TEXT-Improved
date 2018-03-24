@@ -46,13 +46,13 @@ def main(args):
     data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.coco_detection_result,
                              transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
-                             dummy_object=1)
+                             dummy_object=100)
     # TODO: A better way to deal with zero out
 
     # Build the models
     encoder = EncoderCNN(args.embed_size)
     # the layout encoder hidden state size must be the same with decoder input size
-    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 100, args.num_layers)
+    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 101, args.num_layers)
     decoder = DecoderRNN(args.embed_size, args.hidden_size,
                          len(vocab), args.num_layers)
 
@@ -110,13 +110,13 @@ def main(args):
             if (i + 1) % args.save_step == 0:
                 torch.save(decoder.state_dict(),
                            os.path.join(args.model_path,
-                                        'decoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+                                        'gtf-decoder-%d-%d.pkl' % (epoch + 1, i + 1)))
                 torch.save(encoder.state_dict(),
                            os.path.join(args.model_path,
-                                        'encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+                                        'gtf-encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
                 torch.save(layout_encoder.state_dict(),
                            os.path.join(args.model_path,
-                                        'layout_encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+                                        'gtf-layout_encoder-%d-%d.pkl' % (epoch + 1, i + 1)))
 
 
 if __name__ == '__main__':
@@ -147,11 +147,11 @@ if __name__ == '__main__':
                         help='layout encoding size')
     parser.add_argument('--hidden_size', type=int, default=512,
                         help='dimension of lstm hidden states')
-    parser.add_argument('--num_layers', type=int, default=5,
+    parser.add_argument('--num_layers', type=int, default=3,
                         help='number of layers in google transformer')
 
     parser.add_argument('--num_epochs', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=20)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--seed', type=int, default=123, help='random generator seed')
