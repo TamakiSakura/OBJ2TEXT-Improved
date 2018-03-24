@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 import os
 import pickle
-from data_loader import get_loader
+from data_val_loader import get_loader
 from build_vocab import Vocabulary
 from model import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
@@ -28,14 +28,13 @@ def load_image(image_path, transform=None):
     
     return image
 
-def compute_bleu(reference_sentence, predicted_sentence):
+def compute_bleu(reference_tokenized, predicted_sentence):
     """
     Given a reference sentence, and a predicted sentence, compute the BLEU similary between them.
     """
-    reference_tokenized = word_tokenize(reference_sentence.lower())
     predicted_tokenized = word_tokenize(predicted_sentence.lower())
-    return sentence_bleu([reference_tokenized], 
-                         predicted_tokenized,
+    return sentence_bleu(reference_tokenized, 
+                         predicted_tokenized)
                          weights=(1.0, 0.0, 0.0, 0.0))
 
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
@@ -46,7 +45,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
     bleu_score_all = 0
     bleu_score_batch = 0
     n = 0
-    for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader_val):
+    for i, (images, captions, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader_val):
         # Set mini-batch dataset
         images = to_var(images)
         # Modify This part for using visual features or not
@@ -70,22 +69,18 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
 
             predicted_sentence = ' '.join(sampled_caption)
             print("predict: "+ predicted_sentence)
-            ref_ids = captions[j][1:-1]
-            ref_captions = []
-            for word_id in ref_ids:
-                word = vocab.idx2word[word_id]
-                if word == '<end>':
-                    break
-                ref_captions.append(word)
-            reference_sentence = ' '.join(ref_captions)
+            ref_caption = captions[j][0]
+            reference_sentence = ' '.join(ref_caption)
             print("reference: "+ reference_sentence)
-            bleu_score_all+=compute_bleu(reference_sentence, predicted_sentence)
-            bleu_score_batch+=compute_bleu(reference_sentence, predicted_sentence)
-
-
+            print(captions[j])
+            score = compute_bleu(captions[j], predicted_sentence)
+            bleu_score_all += score
+            bleu_score_batch += score
+        
         print("Validation step %d, avg bleu: %f"%(i,bleu_score_batch/batch_size))
         bleu_score_batch = 0
 
+        w = 1 / 0
     print("Total number of Validation Images : %d, overall avg bleu: %f"%(i,bleu_score_all/(i*batch_size)))
 
 
