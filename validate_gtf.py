@@ -72,20 +72,14 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
 
             predicted_sentence = ' '.join(sampled_caption)
             print("predict: "+ predicted_sentence)
-            ref_ids = captions[j][1:-1]
-            ref_captions = []
-            for word_id in ref_ids:
-                word = vocab.idx2word[word_id]
-                if word == '<end>':
-                    break
-                ref_captions.append(word)
-            reference_sentence = ' '.join(ref_captions)
+            ref_caption = captions[j][0]
+            reference_sentence = ' '.join(ref_caption)
             print("reference: "+ reference_sentence)
-            print(captions[j])
+            #print(captions[j])
             score = compute_bleu(captions[j], predicted_sentence)
             bleu_score_all += score
             bleu_score_batch += score
-
+        
         print("Validation step %d, avg bleu: %f"%(i,bleu_score_batch/batch_size))
         bleu_score_batch = 0
 
@@ -107,7 +101,7 @@ def main(args):
     # Build Models
     # encoder = EncoderCNN(args.embed_size)
     # encoder.eval()  # evaluation mode (BN uses moving mean/variance)
-    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 100, args.num_layers)
+    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 101, args.num_layers)
     decoder = DecoderRNN(args.embed_size, args.hidden_size, 
                          len(vocab), args.num_layers)
     
@@ -130,9 +124,9 @@ if __name__ == '__main__':
 
     # parser.add_argument('--encoder_path', type=str, default='./models/encoder-5-3000.pkl',
     #                     help='path for trained encoder')
-    parser.add_argument('--layout_encoder_path', type=str, default='./models/gtf-layout_encoder-1-1000.pkl',
+    parser.add_argument('--layout_encoder_path', type=str, default='./models/gtf-layout_encoder-1-5000.pkl',
                         help='path for trained encoder')
-    parser.add_argument('--decoder_path', type=str, default='./models/gtf-decoder-1-1000.pkl',
+    parser.add_argument('--decoder_path', type=str, default='./models/gtf-decoder-1-5000.pkl',
                         help='path for trained decoder')
     parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
                         help='path for vocabulary wrapper')

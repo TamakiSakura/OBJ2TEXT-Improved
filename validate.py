@@ -72,7 +72,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
             ref_caption = captions[j][0]
             reference_sentence = ' '.join(ref_caption)
             print("reference: "+ reference_sentence)
-            print(captions[j])
+            #print(captions[j])
             score = compute_bleu(captions[j], predicted_sentence)
             bleu_score_all += score
             bleu_score_batch += score

@@ -87,7 +87,7 @@ class LayoutEncoder(nn.Module):
     
 class DecoderRNN(nn.Module):
     def __init__(self, embed_size, hidden_size, vocab_size, num_layers,
-                 n_max_seq=50, 
+                 n_max_seq=100, 
                  n_head=8, d_k=64, d_v=64, d_inner_hid=1024, 
                  dropout=0.1):
         """Set the hyper-parameters and build the layers."""
@@ -127,7 +127,7 @@ class DecoderRNN(nn.Module):
         tgt_pos = Variable(tgt_pos)
         if torch.cuda.is_available():
             tgt_pos = tgt_pos.cuda() 
-        
+
         # Position Encoding addition
         dec_input += self.position_enc(tgt_pos)
         
@@ -193,7 +193,7 @@ class DecoderRNN(nn.Module):
             # -- Decoding -- #
             dec_output = self(
                 src_seq, dec_partial_seq, enc_output, 
-                [len_dec_seq] * batch_size, False)
+                [len_dec_seq] * n_remaining_sents * beam_size, False)
             dec_output = dec_output[:, -1, :] # (batch * beam) * d_model
             out = self.softmax(dec_output)
 
