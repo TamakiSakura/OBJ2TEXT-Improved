@@ -1,8 +1,8 @@
 
 PAD = 0
-UNK = 1
-BOS = 2
-EOS = 3
+UNK = -1
+BOS = -1
+EOS = -1
 
 PAD_WORD = '<blank>'
 UNK_WORD = '<unk>'

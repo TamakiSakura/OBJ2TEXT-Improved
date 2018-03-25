@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 import os
 import pickle
-from data_loader import get_loader
+from data_val_loader import get_loader
 from build_vocab import Vocabulary
 from model_gtf import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
@@ -28,13 +28,12 @@ def load_image(image_path, transform=None):
     
     return image
 
-def compute_bleu(reference_sentence, predicted_sentence):
+def compute_bleu(reference_tokenized, predicted_sentence):
     """
     Given a reference sentence, and a predicted sentence, compute the BLEU similary between them.
     """
-    reference_tokenized = word_tokenize(reference_sentence.lower())
     predicted_tokenized = word_tokenize(predicted_sentence.lower())
-    return sentence_bleu([reference_tokenized], 
+    return sentence_bleu(reference_tokenized, 
                          predicted_tokenized,
                          weights=(1.0, 0.0, 0.0, 0.0))
 
@@ -47,7 +46,7 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
     bleu_score_all = 0
     bleu_score_batch = 0
     n = 0
-    for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader_val):
+    for i, (images, captions, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader_val):
         # Set mini-batch dataset
         images = to_var(images)
         label_seqs = to_var(label_seqs)
@@ -82,11 +81,10 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
                 ref_captions.append(word)
             reference_sentence = ' '.join(ref_captions)
             print("reference: "+ reference_sentence)
-            bleu_score_curr = compute_bleu(reference_sentence, predicted_sentence)
-            #print("curr bleu: "+ str(bleu_score_curr))
-            bleu_score_all += bleu_score_curr
-            bleu_score_batch += bleu_score_curr
-
+            print(captions[j])
+            score = compute_bleu(captions[j], predicted_sentence)
+            bleu_score_all += score
+            bleu_score_batch += score
 
         print("Validation step %d, avg bleu: %f"%(i,bleu_score_batch/batch_size))
         bleu_score_batch = 0
@@ -132,9 +130,9 @@ if __name__ == '__main__':
 
     # parser.add_argument('--encoder_path', type=str, default='./models/encoder-5-3000.pkl',
     #                     help='path for trained encoder')
-    parser.add_argument('--layout_encoder_path', type=str, default='./models/gtf-layout_encoder-1-19000.pkl',
+    parser.add_argument('--layout_encoder_path', type=str, default='./models/gtf-layout_encoder-1-1000.pkl',
                         help='path for trained encoder')
-    parser.add_argument('--decoder_path', type=str, default='./models/gtf-decoder-1-19000.pkl',
+    parser.add_argument('--decoder_path', type=str, default='./models/gtf-decoder-1-1000.pkl',
                         help='path for trained decoder')
     parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
                         help='path for vocabulary wrapper')
@@ -157,17 +155,17 @@ if __name__ == '__main__':
                         default='./data/annotations/instances_val2014.json',
                         help='path coco object detection result file for valiadation')
 
-    parser.add_argument('--embed_size', type=int , default=512,
+    parser.add_argument('--embed_size', type=int , default=256,
                         help='dimension of word embedding vectors')
-    parser.add_argument('--layout_embed_size', type=int, default=512,
+    parser.add_argument('--layout_embed_size', type=int, default=256,
                         help='layout encoding size')
     parser.add_argument('--hidden_size', type=int , default=512,
                         help='dimension of lstm hidden states')
-    parser.add_argument('--num_layers', type=int , default=2,
+    parser.add_argument('--num_layers', type=int , default=3,
                         help='number of layers in google transformer')
 
     parser.add_argument('--num_workers', type=int, default=2)
-    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--seed', type=int, default=123, help='random generator seed')
 
     

@@ -8,7 +8,8 @@ from data_loader import get_loader
 from build_vocab import Vocabulary
 from model_gtf import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
-from torch.nn.utils.rnn import pack_padded_sequence
+from torch.nn.utils.rnn import pack_padded_sequence as pack
+from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torchvision import transforms
 import transformer.Constants as Constants
 
@@ -76,11 +77,14 @@ def main(args):
 
             # Set mini-batch dataset
             images = to_var(images)
-            captions = to_var(captions)
+            targets = to_var(captions)
             label_seqs = to_var(label_seqs)
             location_seqs = to_var(location_seqs)
-            targets = pack_padded_sequence(captions[:,1:], lengths, batch_first=True)[0]
-
+            targets = pack(targets[:,1:], lengths, batch_first=True)[0]
+            
+            for idx_length in range(len(lengths)):
+                captions[idx_length][lengths[idx_length]] = 0
+            captions = to_var(captions)
             # Forward, Backward and Optimize
             # decoder.zero_grad()
             # layout_encoder.zero_grad()
@@ -93,7 +97,7 @@ def main(args):
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
             
-            outputs = decoder(label_seqs, captions[:,:-1], comb_features, lengths)
+            outputs = decoder(label_seqs, captions, comb_features, lengths)
              
             loss = criterion(outputs, targets)
             optimizer.zero_grad()

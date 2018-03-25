@@ -119,10 +119,17 @@ class DecoderRNN(nn.Module):
         """Decode the input into sentence"""
         # Word embedding look up
         dec_input = self.tgt_word_emb(tgt_seq)
-
+        
+        tgt_pos = tgt_seq.data.clone() 
+        for i in range(len(length)):
+            for j in range(length[i]):
+                tgt_pos[i][j] = j + 1
+        tgt_pos = Variable(tgt_pos)
+        if torch.cuda.is_available():
+            tgt_pos = tgt_pos.cuda() 
+        
         # Position Encoding addition
-        # dec_input += self.position_enc(tgt_seq)
-        # TODO: UNIMPLEMENTED
+        dec_input += self.position_enc(tgt_pos)
         
         # Decode
         dec_slf_attn_pad_mask = get_attn_padding_mask(tgt_seq, tgt_seq)
