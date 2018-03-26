@@ -10,7 +10,7 @@ from model import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
-from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.bleu_score import *
 from nltk import word_tokenize
 
 
@@ -34,8 +34,8 @@ def compute_bleu(reference_tokenized, predicted_sentence):
     """
     predicted_tokenized = word_tokenize(predicted_sentence.lower())
     return sentence_bleu(reference_tokenized, 
-                         predicted_tokenized)
-                         weights=(1.0, 0.0, 0.0, 0.0))
+                         predicted_tokenized,
+                         smoothing_function = SmoothingFunction().method1)
 
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
     # Build data loader
@@ -80,7 +80,6 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
         print("Validation step %d, avg bleu: %f"%(i,bleu_score_batch/batch_size))
         bleu_score_batch = 0
 
-        w = 1 / 0
     print("Total number of Validation Images : %d, overall avg bleu: %f"%(i,bleu_score_all/(i*batch_size)))
 
 
