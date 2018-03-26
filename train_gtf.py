@@ -48,8 +48,6 @@ def main(args):
                              transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
                              dummy_object=100)
-    # TODO: A better way to deal with zero out
-
     # Build the models
     encoder = EncoderCNN(args.embed_size)
     # the layout encoder hidden state size must be the same with decoder input size

@@ -63,7 +63,6 @@ class Beam(object):
         self.next_ys.append(best_scores_id - prev_k * num_words)
 
         # End condition is when top-of-beam is EOS.
-        # TODO: Not reading our EOS for now
         if self.next_ys[-1][0] == Constants.EOS:
             self.done = True
             self.all_scores.append(self.scores)
