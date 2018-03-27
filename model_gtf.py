@@ -76,7 +76,7 @@ class LayoutEncoder(nn.Module):
         # layout encoding - batch_size x max_seq_len x embed_size
         layout_encoding = label_encoding + location_encoding
         
-        if not visual_seqs is None
+        if not visual_seqs is None:
             visual_encoding = self.visual_encoder(visual_seqs.view(-1, 1024))
             visual_encoding = visual_encoding.view(visual_encoding.size(0), -1, visual_encoding.size(1))
             layout_encoding = layout_encoding + visual_encoding

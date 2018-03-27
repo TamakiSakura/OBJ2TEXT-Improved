@@ -9,13 +9,14 @@ from PIL import Image
 from build_vocab import Vocabulary
 from pycocotools.coco import COCO
 import json
+import h5py
 # import matplotlib.pyplot as plt
 
 
 class CocoDataset(data.Dataset):
     """COCO Custom Dataset compatible with torch.utils.data.DataLoader."""
-    def __init__(self, root, coco_annotation, vocab, coco_detection_result, 
-                 transform=None, yolo=False, dummy_object=0):
+    def __init__(self, root, coco_annotation, vocab, MSCOCO_result, coco_detection_result,
+                 transform=None, yolo=True, dummy_object=0):
         """Set the path for images, captions and vocabulary wrapper.
         
         Args:
@@ -26,7 +27,7 @@ class CocoDataset(data.Dataset):
         """
         self.root = root
         self.coco = COCO(coco_annotation)
-        self.coco_obj = COCO(coco_detection_result)
+        self.coco_obj = COCO(MSCOCO_result)
         self.ids = list(self.coco.anns.keys())
         self.vocab = vocab
         self.transform = transform
@@ -36,8 +37,21 @@ class CocoDataset(data.Dataset):
         if self.yolo:
             with open(coco_detection_result, 'r') as f:
                 self.detection_results = json.load(f)
-            self.locations = {result['id']: result['bboxes'] for result in self.detection_results}
-            self.labels = {result['id']: result['full_categories'] for result in self.detection_results}
+            # self.locations = {result['id']: result['bboxes'] for result in self.detection_results}
+            # self.labels = {result['id']: result['full_categories'] for result in self.detection_results}
+
+            self.locations = {}
+            self.labels = {}
+            self.widths = {}
+            self.heights = {}
+            for key in self.detection_results:
+                layouts = self.detection_results[key]
+                if layouts['bboxes'] != []:
+                    self.locations[key] = layouts['bboxes']
+                    self.labels[key] = layouts['categories']
+                    self.widths[key] = layouts['width']
+                    self.heights[key] = layouts['height']
+
             
             train_visual_features = h5py.File('./data/train2014_visual_features.hdf5', 'r')
             self.visual_features = {}
@@ -90,18 +104,23 @@ class CocoDataset(data.Dataset):
             visuals = []
         else:
             if self.yolo:
-                locations = self.locations[img_id]
+                # locations = self.locations[img_id]
+                locations = encode_location(self.locations[img_id], self.widths[img_id], self.heights[img_id])
                 visuals = self.visual_features[img_id]
             else:
                 details = self.coco_obj.loadImgs(img_id)[0]
-                locations = encode_location(self.locations[img_id], 
+                locations = encode_location(self.locations[img_id],
                                             details['width'], details['height'])
-                visuals = []
+                visuals = None
         if len(labels) != len(locations):
             raise ValueError("number of labels nust be equal to number of locations")
         if len(labels) == 0:
             labels = [self.dummy_object]
             locations = encode_location([(0,0,100,100)], 100, 100)
+            if self.yolo:
+                visuals = []
+            else:
+                visuals = None
         
         return image, target, labels, locations, visuals
 
@@ -179,12 +198,14 @@ def decode_location(location):
     height = location % 1e3
     return torch.Tensor((x / 608, y / 608, width / 608, height / 608))
 
-def get_loader(root, coco_annotation, vocab, coco_detection_result, transform, batch_size, shuffle, num_workers, dummy_object=0):
+def get_loader(root, coco_annotation, vocab, MSCOCO_result, coco_detection_result, transform, batch_size, shuffle, num_workers, dummy_object=0):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
     # COCO caption dataset
+
     coco = CocoDataset(root=root,
                        coco_annotation=coco_annotation,
                        vocab=vocab,
+                       MSCOCO_result=MSCOCO_result,
                        coco_detection_result=coco_detection_result,
                        transform=transform,
                        dummy_object=dummy_object)
