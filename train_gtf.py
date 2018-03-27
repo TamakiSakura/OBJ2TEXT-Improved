@@ -69,7 +69,9 @@ def main(args):
     # Train the Models
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
-        for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
+        for i, (images, captions, lengths, 
+                label_seqs, location_seqs, visual_seqs,
+                layout_lengths) in enumerate(data_loader):
             for idx_length in range(len(lengths)):
                 lengths[idx_length] -= 1
 
@@ -90,9 +92,11 @@ def main(args):
             
             # Modify This part for using visual features or not
              
-            # features = encoder(images)
-            layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
-            # comb_features = features + layout_encoding
+            # vgg_features = encoder(images)
+            # visual_seqs = None
+            layout_encoding = layout_encoder(label_seqs, location_seqs, visual_seqs, 
+                                             layout_lengths)
+            # comb_features = vgg_features + layout_encoding
             comb_features = layout_encoding
             
             outputs = decoder(label_seqs, captions, comb_features, lengths)

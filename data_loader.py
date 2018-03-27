@@ -26,6 +26,7 @@ class CocoDataset(data.Dataset):
         """
         self.root = root
         self.coco = COCO(coco_annotation)
+        self.coco_obj = COCO(coco_detection_result)
         self.ids = list(self.coco.anns.keys())
         self.vocab = vocab
         self.transform = transform
@@ -37,8 +38,16 @@ class CocoDataset(data.Dataset):
                 self.detection_results = json.load(f)
             self.locations = {result['id']: result['bboxes'] for result in self.detection_results}
             self.labels = {result['id']: result['full_categories'] for result in self.detection_results}
+            
+            train_visual_features = h5py.File('./data/train2014_visual_features.hdf5', 'r')
+            self.visual_features = {}
+            for key in train_visual_features.keys():
+                feature = list(train_visual_features[key])
+                if feature != []:
+                    self.visual_features[int(key)] = []
+                    for arr in feature:
+                        self.visual_features[int(key)].append(arr)
         else:
-            self.coco_obj = COCO(coco_detection_result)
             self.locations = {}
             self.labels = {}
             for key in self.coco_obj.anns.keys():
@@ -81,16 +90,19 @@ class CocoDataset(data.Dataset):
         else:
             if self.yolo:
                 locations = self.locations[img_id]
+                visuals = self.visual_features[img_id]
             else:
                 details = self.coco_obj.loadImgs(img_id)[0]
                 locations = encode_location(self.locations[img_id], 
                                             details['width'], details['height'])
+                visuals = []
         if len(labels) != len(locations):
             raise ValueError("number of labels nust be equal to number of locations")
         if len(labels) == 0:
             labels = [self.dummy_object]
             locations = encode_location([(0,0,100,100)], 100, 100)
-        return image, target, labels, locations
+        
+        return image, target, labels, locations, visuals
 
     def __len__(self):
         return len(self.ids)
@@ -114,7 +126,7 @@ def collate_fn(data):
     """
     # Sort a data list by caption length (descending order).
     data.sort(key=lambda x: len(x[1]), reverse=True)
-    images, captions, label_seqs, location_seqs = zip(*data)
+    images, captions, label_seqs, location_seqs, visual_seqs = zip(*data)
     assert len(label_seqs) > 0
     assert len(label_seqs) == len(location_seqs)
 
@@ -137,9 +149,14 @@ def collate_fn(data):
         for j in range(len(location_seq)):
             coords = decode_location(location_seq[j])
             location_seq_data[i, j] = coords
-
+    
+    visual_seq_data = torch.zeros(len(visual_seqs), max(label_seq_lengths), 1024)
+    for i, visual_seq in enumerate(visual_seqs):
+        for j in range(len(visual_seq)):
+            visual_seq_data[i, j] = torch.Tensor(visual_seq[j])
+ 
     # TODO visualize detection results on images
-    return images, targets, lengths, label_seq_data, location_seq_data, label_seq_lengths
+    return images, targets, lengths, label_seq_data, location_seq_data, visual_seq_data, label_seq_lengths
 
 
 def encode_location(bboxs, img_w, img_h):

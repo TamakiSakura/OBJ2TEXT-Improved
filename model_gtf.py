@@ -48,6 +48,7 @@ class LayoutEncoder(nn.Module):
         
         self.label_encoder = nn.Embedding(vocab_size, layout_encoding_size)
         self.location_encoder = nn.Linear(4, layout_encoding_size)
+        self.visual_encoder = nn.Linear(1024, layout_encoding_size)
         
         self.init_weights()
 
@@ -63,7 +64,7 @@ class LayoutEncoder(nn.Module):
         self.location_encoder.weight.data.uniform_(-0.1, 0.1)
         self.location_encoder.bias.data.fill_(0)
 
-    def forward(self, label_seqs, location_seqs, lengths):
+    def forward(self, label_seqs, location_seqs, visual_seqs, lengths):
         """Encode the Layout"""
         # encode label sequences
         label_encoding = self.label_encoder(label_seqs)
@@ -74,6 +75,11 @@ class LayoutEncoder(nn.Module):
 
         # layout encoding - batch_size x max_seq_len x embed_size
         layout_encoding = label_encoding + location_encoding
+        
+        if not visual_seqs is None
+            visual_encoding = self.visual_encoder(visual_seqs.view(-1, 1024))
+            visual_encoding = visual_encoding.view(visual_encoding.size(0), -1, visual_encoding.size(1))
+            layout_encoding = layout_encoding + visual_encoding
 
         enc_output = layout_encoding
 
