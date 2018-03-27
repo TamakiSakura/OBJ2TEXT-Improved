@@ -44,7 +44,7 @@ def main(args):
     Constants.set_constant(vocab)
 
     # Build data loader
-    data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.coco_detection_result,
+    data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.MSCOCO_result, args.coco_detection_result,
                              transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
                              dummy_object=100)
@@ -138,8 +138,11 @@ if __name__ == '__main__':
     parser.add_argument('--caption_path', type=str,
                         default='./data/annotations/captions_train2014.json',
                         help='path for train annotation json file')
-    parser.add_argument('--coco_detection_result', type=str,
+    parser.add_argument('--MSCOCO_result', type=str,
                         default='./data/annotations/instances_train2014.json',
+                        help='path coco object detection result file')
+    parser.add_argument('--coco_detection_result', type=str,
+                        default='./data/train2014_layouts.json',
                         help='path coco object detection result file')
     parser.add_argument('--log_step', type=int, default=10,
                         help='step size for prining log info')
