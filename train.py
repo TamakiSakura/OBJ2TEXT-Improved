@@ -133,7 +133,9 @@ def main(args):
     # Train the Models
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
-        for i, (images, captions, lengths, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader):
+        for i, (images, captions, lengths, 
+                label_seqs, location_seqs, visual_seqs,
+                layout_lengths) in enumerate(data_loader):
             # Set mini-batch dataset
             images = to_var(images)
             captions = to_var(captions)
