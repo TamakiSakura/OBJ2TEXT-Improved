@@ -3,7 +3,7 @@ from nltk.stem.porter import PorterStemmer
 
 def cat2vocab(coco, vocab):
     print("Creating Converter...")
-    converter = np.zeros((91, vocab.idx))
+    converter = np.zeros((100, vocab.idx))
     lemmatizer = PorterStemmer()
     for cat_id in coco.cats.keys():
         categories = coco.cats[cat_id]['name'].split(" ")

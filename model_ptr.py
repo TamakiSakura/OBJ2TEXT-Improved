@@ -143,21 +143,17 @@ class DecoderRNN(nn.Module):
         # Pointer Generator
         p_gen = self.sigmoid(self.pgen_encoder(encoder_output) + self.pgen_decoder(unpacked_hiddens))
 
-        one_hot = torch.FloatTensor(encoder_input.size()[0], encoder_input.size()[1], 91).zero_()
+        one_hot = torch.FloatTensor(encoder_input.size()[0], encoder_input.size()[1], 100).zero_()
         one_hot.scatter_(2, encoder_input.unsqueeze(2), 1)
         one_hot = Variable(one_hot) # BxT_ex91
         
         if torch.cuda.is_available():
             one_hot = one_hot.cuda()
         
-        one_hot_vocab = torch.mm(one_hot.view(-1, 91), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
+        one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
 
         outputs_regular = self.linear(unpacked_hiddens)
         outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
-        print(torch.sum(outputs_pointer))
-        print(torch.max(outputs_pointer))
-        print(torch.max(p_gen))
-        print(torch.min(p_gen))
         outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
         
         outputs = pack(outputs, lengths, batch_first=True)[0] 

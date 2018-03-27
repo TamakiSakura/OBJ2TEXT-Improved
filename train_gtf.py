@@ -47,11 +47,11 @@ def main(args):
     data_loader = get_loader(args.image_dir, args.caption_path, vocab, args.coco_detection_result,
                              transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
-                             dummy_object=100)
+                             dummy_object=99)
     # Build the models
     encoder = EncoderCNN(args.embed_size)
     # the layout encoder hidden state size must be the same with decoder input size
-    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 101, args.num_layers)
+    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 100, args.num_layers)
     decoder = DecoderRNN(args.embed_size, args.hidden_size,
                          len(vocab), args.num_layers)
 
