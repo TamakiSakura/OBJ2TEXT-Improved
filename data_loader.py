@@ -198,7 +198,10 @@ def decode_location(location):
     height = location % 1e3
     return torch.Tensor((x / 608, y / 608, width / 608, height / 608))
 
-def get_loader(root, coco_annotation, vocab, MSCOCO_result, coco_detection_result, transform, batch_size, shuffle, num_workers, dummy_object=0):
+def get_loader(root, coco_annotation, vocab, 
+               MSCOCO_result, coco_detection_result, 
+               transform, batch_size, shuffle, num_workers, 
+               yolo=True, dummy_object=0):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
     # COCO caption dataset
 
@@ -208,7 +211,8 @@ def get_loader(root, coco_annotation, vocab, MSCOCO_result, coco_detection_resul
                        MSCOCO_result=MSCOCO_result,
                        coco_detection_result=coco_detection_result,
                        transform=transform,
-                       dummy_object=dummy_object)
+                       dummy_object=dummy_object,
+                       yolo=yolo)
     
     # Data loader for COCO dataset
     # This will return (images, captions, lengths) for every iteration.
