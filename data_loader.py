@@ -87,6 +87,7 @@ class CocoDataset(data.Dataset):
         if labels is None:
             labels = []
             locations = []
+            visuals = []
         else:
             if self.yolo:
                 locations = self.locations[img_id]
@@ -157,7 +158,6 @@ def collate_fn(data):
  
     # TODO visualize detection results on images
     return images, targets, lengths, label_seq_data, location_seq_data, visual_seq_data, label_seq_lengths
-
 
 def encode_location(bboxs, img_w, img_h):
     locations = []
