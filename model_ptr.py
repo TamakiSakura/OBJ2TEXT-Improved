@@ -1,217 +1,177 @@
+import argparse
 import torch
 import torch.nn as nn
-import torchvision.models as models
-from torch.nn.utils.rnn import pack_padded_sequence as pack
-from torch.nn.utils.rnn import pad_packed_sequence as unpack
+import numpy as np
+import os
+import pickle
+from data_loader import get_loader
+from build_vocab import Vocabulary
+from model_ptr import EncoderCNN, DecoderRNN, LayoutEncoder
 from torch.autograd import Variable
+from torch.nn.utils.rnn import pack_padded_sequence
+from torchvision import transforms
+from nltk.translate.bleu_score import sentence_bleu
+from nltk import word_tokenize
+from cat2vocab import cat2vocab
+
+def to_var(x, volatile=False):
+    if torch.cuda.is_available():
+        x = x.cuda()
+    return Variable(x, volatile=volatile)
+
+def compute_bleu(reference_sentence, predicted_sentence):
+    """
+    Given a reference sentence, and a predicted sentence, compute the BLEU similary between them.
+    """
+    reference_tokenized = word_tokenize(reference_sentence.lower())
+    predicted_tokenized = word_tokenize(predicted_sentence.lower())
+    return sentence_bleu([reference_tokenized], predicted_tokenized)
 
 
-class EncoderCNN(nn.Module):
-    def __init__(self, embed_size):
-        """Load the pretrained VGG16 and replace top fc layer."""
-        super(EncoderCNN, self).__init__()
-        vgg16 = models.vgg16(pretrained=True)
-        self.vgg16_feat = vgg16.features
-        self.vgg16_clf = nn.Sequential(*list(vgg16.classifier.children())[:-1])
-        self.vgg16_feat.eval()
-        self.vgg16_clf.eval()
-        self.linear = nn.Linear(4096, embed_size)
-        self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
-        self.init_weights()
+def main(args):
 
-    def init_weights(self):
-        """Initialize the weights."""
-        self.linear.weight.data.normal_(0.0, 0.02)
-        self.linear.bias.data.fill_(0)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(args.seed)
 
-    def forward(self, images):
-        """Extract the image feature vectors."""
-        features = self.vgg16_feat(images)
-        features = features.view(features.size(0), -1)
-        features = self.vgg16_clf(features)
-        features = self.bn(self.linear(features))
-        return features
+    # Create model directory
+    if not os.path.exists(args.model_path):
+        os.makedirs(args.model_path)
+
+    # Image preprocessing
+    # For normalization, see https://github.com/pytorch/vision#models
+    transform = transforms.Compose([
+        # transforms.RandomCrop(args.crop_size),
+        # transforms.RandomHorizontalFlip(),
+        transforms.Scale(args.crop_size),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406),
+                             (0.229, 0.224, 0.225))])
+
+    # Load vocabulary wrapper.
+    with open(args.vocab_path, 'rb') as f:
+        vocab = pickle.load(f)
+
+    # Build data loader
+    data_loader = get_loader(args.image_dir, args.caption_path, vocab, 
+                             args.MSCOCO_result, args.coco_detection_result,
+                             transform, args.batch_size,
+                             shuffle=True, num_workers=args.num_workers,
+                             dummy_object=99,
+                             yolo=False)
+
+    # Build the models
+    encoder = EncoderCNN(args.embed_size)
+    
+    # Create the converter
+    converter = cat2vocab(data_loader.dataset.coco_obj, vocab)
+    converter = to_var(torch.from_numpy(converter).type(torch.FloatTensor))
+     
+    # the layout encoder hidden state size must be the same with decoder input size
+    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 100, args.num_layers)
+    decoder = DecoderRNN(converter,
+                         args.embed_size, args.hidden_size,
+                         len(vocab), args.num_layers)
+
+    if torch.cuda.is_available():
+        encoder.cuda()
+        layout_encoder.cuda()
+        decoder.cuda()
+
+    # Loss and Optimizer
+    criterion = nn.CrossEntropyLoss()
+    params = list(layout_encoder.parameters()) + list(decoder.parameters()) + \
+	     list(encoder.linear.parameters()) + list(encoder.bn.parameters())
+    optimizer = torch.optim.Adam(params, lr=args.learning_rate)
+
+    # Train the Models
+    total_step = len(data_loader)
+    for epoch in range(args.num_epochs):
+        for i, (images, captions, lengths, 
+                label_seqs, location_seqs, visual_seqs,
+                layout_lengths) in enumerate(data_loader):
+            # Set mini-batch dataset
+            images = to_var(images)
+            captions = to_var(captions)
+            targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
+
+            # Forward, Backward and Optimize
+            # decoder.zero_grad()
+            # layout_encoder.zero_grad()
+            # encoder.zero_grad()
+            
+            # Modify This part for using visual features or not
+             
+            # features = encoder(images)
+            layout_encoding, encoder_features = layout_encoder(label_seqs, location_seqs, layout_lengths)
+            # comb_features = features + layout_encoding
+            comb_features = layout_encoding
+
+            outputs = decoder(comb_features, captions, lengths, label_seqs, 
+                              encoder_features)
+            
+            loss = criterion(outputs, targets)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Print log info
+            if i % args.log_step == 0:
+                print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Perplexity: %5.4f'
+                      % (epoch, args.num_epochs, i, total_step,
+                         loss.data[0], np.exp(loss.data[0])))
+
+                # Save the models
+            if (i + 1) % args.save_step == 0:
+                torch.save(decoder.state_dict(),
+                           os.path.join(args.model_path,
+                                        'decoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+
+                torch.save(layout_encoder.state_dict(),
+                           os.path.join(args.model_path,
+                                        'layout_encoding-%d-%d.pkl' % (epoch + 1, i + 1)))
 
 
-class LayoutEncoder(nn.Module):
-    def __init__(self, layout_encoding_size, hidden_size, vocab_size, num_layers):
-        """Set the hyper-parameters and build the layers."""
-        super(LayoutEncoder, self).__init__()
-        self.label_encoder = nn.Embedding(vocab_size, layout_encoding_size)
-        self.location_encoder = nn.Linear(4, layout_encoding_size)
-        self.visual_encoder = nn.Linear(1024, layout_encoding_size)
 
-        self.lstm = nn.LSTM(layout_encoding_size, hidden_size, num_layers, batch_first=True)
-        self.init_weights()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model_path', type=str, default='./models/',
+                        help='path for saving trained models')
+    parser.add_argument('--crop_size', type=int, default=224,
+                        help='size for randomly cropping images')
+    parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
+                        help='path for vocabulary wrapper')
+    parser.add_argument('--image_dir', type=str, default='./data/resized2014',
+                        help='directory for resized images')
+    parser.add_argument('--caption_path', type=str,
+                        default='./data/annotations/captions_train2014.json',
+                        help='path for train annotation json file')
+    parser.add_argument('--MSCOCO_result', type=str,
+                        default='./data/annotations/instances_train2014.json',
+                        help='path coco object detection result file')
+    parser.add_argument('--coco_detection_result', type=str,
+                        default='./data/train2014_layouts.json',
+                        help='path coco object detection result file')
+    parser.add_argument('--log_step', type=int, default=10,
+                        help='step size for prining log info')
+    parser.add_argument('--save_step', type=int, default=1000,
+                        help='step size for saving trained models')
 
-    def init_weights(self):
-        """Initialize weights."""
-        self.label_encoder.weight.data.uniform_(-0.1, 0.1)
-        self.location_encoder.weight.data.uniform_(-0.1, 0.1)
-        self.location_encoder.bias.data.fill_(0)
+    # Model parameters
+    parser.add_argument('--embed_size', type=int, default=256,
+                        help='dimension of word embedding vectors')
+    parser.add_argument('--layout_embed_size', type=int, default=256,
+                        help='layout encoding size')
+    parser.add_argument('--hidden_size', type=int, default=512,
+                        help='dimension of lstm hidden states')
+    parser.add_argument('--num_layers', type=int, default=1,
+                        help='number of layers in lstm')
 
-    def forward(self, label_seqs, location_seqs, visual_seqs, lengths):
-        # sort label sequences and location sequences in batch dimension according to length
-        batch_idx = sorted(range(len(lengths)), key=lambda k: lengths[k], reverse=True)
-        reverse_batch_idx = torch.LongTensor([batch_idx.index(i) for i in range(len(batch_idx))])
-
-        lens_sorted = sorted(lengths, reverse=True)
-        label_seqs_sorted = torch.index_select(label_seqs, 0, torch.LongTensor(batch_idx))
-        location_seqs_sorted = torch.index_select(location_seqs, 0, torch.LongTensor(batch_idx))
-        visual_seqs_sorted = torch.index_select(visual_seqs, 0, torch.LongTensor(batch_idx))
-
-        # assert torch.equal(torch.index_select(label_seqs_sorted, 0, reverse_batch_idx), label_seqs)
-        # assert torch.equal(torch.index_select(location_seqs_sorted, 0, reverse_batch_idx), location_seqs)
-
-        if torch.cuda.is_available():
-            reverse_batch_idx = reverse_batch_idx.cuda()
-            label_seqs_sorted = label_seqs_sorted.cuda()
-            location_seqs_sorted = location_seqs_sorted.cuda()
-            visual_seqs_sorted = visual_seqs_sorted.cuda()
-
-        # create Variables
-        label_seqs_sorted_var = Variable(label_seqs_sorted, requires_grad=False)
-        location_seqs_sorted_var = Variable(location_seqs_sorted, requires_grad=False)
-        visual_seqs_sorted_var = Variable(visual_seqs_sorted, requires_grad=False)
-
-        # encode label sequences
-        label_encoding = self.label_encoder(label_seqs_sorted_var)
-
-        # encode location sequences
-        location_seqs_sorted_var = location_seqs_sorted_var.view(-1, 4)
-        location_encoding = self.location_encoder(location_seqs_sorted_var)
-        location_encoding = location_encoding.view(label_encoding.size(0), -1, location_encoding.size(1))
-
-        # layout encoding - batch_size x max_seq_len x embed_size
-        layout_encoding = label_encoding + location_encoding
-
-        # encode visual sequences (if yolo)
-        if not visual_seqs is None:
-            visual_encoding = self.visual_encoder(visual_seqs.view(-1, 1024))
-            visual_encoding = visual_encoding.view(visual_encoding.size(0), -1, visual_encoding.size(1))
-            layout_encoding = layout_encoding + visual_encoding
-
-        packed = pack(layout_encoding, lens_sorted, batch_first=True)
-        hiddens, _ = self.lstm(packed)
-
-        # unpack hiddens and get last hidden vector
-        hiddens_unpack = unpack(hiddens, batch_first=True)[0]  # batch_size x max_seq_len x embed_size
-        last_hidden_idx = torch.zeros(hiddens_unpack.size(0), 1, hiddens_unpack.size(2)).long()
-        for i in range(hiddens_unpack.size(0)):
-            last_hidden_idx[i, 0, :] = lens_sorted[i] - 1
-        if torch.cuda.is_available():
-            last_hidden_idx = last_hidden_idx.cuda()
-        last_hidden = torch.gather(hiddens_unpack, 1,
-                                   Variable(last_hidden_idx, requires_grad=False))  # batch_size x 1 x embed_size
-        last_hidden = torch.squeeze(last_hidden, 1)  # batch_size x embed_size
-
-        # convert back to original batch order
-        last_hidden = torch.index_select(last_hidden, 0, Variable(reverse_batch_idx, requires_grad=False))
-
-        return last_hidden, hiddens_unpack
-
-
-class DecoderRNN(nn.Module):
-    def __init__(self, converter, embed_size, hidden_size, vocab_size, num_layers):
-        """Set the hyper-parameters and build the layers."""
-        super(DecoderRNN, self).__init__()
-        self.embed = nn.Embedding(vocab_size, embed_size)
-        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
-        self.linear = nn.Linear(hidden_size, vocab_size)
-        self.attn = nn.Linear(hidden_size, embed_size)
-        self.softmax = nn.Softmax(dim=2)
-        self.sigmoid = nn.Sigmoid()
-        self.pgen_encoder = nn.Linear(embed_size, 1)
-        self.pgen_decoder = nn.Linear(hidden_size, 1)
-        self.converter = converter
-        self.init_weights()
-
-    def init_weights(self):
-        """Initialize weights."""
-        self.embed.weight.data.uniform_(-0.1, 0.1)
-        for linear in [self.linear, self.attn, self.pgen_encoder, self.pgen_decoder]:
-            linear.weight.data.uniform_(-0.1, 0.1)
-            linear.bias.data.fill_(0)
-
-    def forward(self, features, captions, lengths, encoder_input, encoder_output):
-        """Decode image feature vectors and generates captions."""
-        # Base LSTM
-        embeddings = self.embed(captions)
-        embeddings = torch.cat((features.unsqueeze(1), embeddings), 1)
-        packed = pack(embeddings, lengths, batch_first=True)
-        hiddens, _ = self.lstm(packed)
-
-        # Creating Mask for Attention
-        mask = encoder_input.eq(0).unsqueeze(1)
-        mask = mask.expand(encoder_input.size()[0], captions.size()[1], encoder_input.size()[1])  # BxT_dxT_e
-
-        # Calculating Attention Score
-        unpacked_hiddens = unpack(hiddens, batch_first=True)[0]  # BxT_dxH
-        encoder_output_permuted = encoder_output.permute(0, 2, 1)  # BxHxT_e
-        attn_weights = torch.bmm(self.attn(unpacked_hiddens), encoder_output_permuted)  # BxT_dxT_e
-        attn_weights.data.masked_fill_(mask, -float('inf'))
-        attn_weights = self.softmax(attn_weights)
-        encoder_output = torch.bmm(attn_weights, encoder_output)  # BxT_dxH
-
-        # Pointer Generator
-        p_gen = self.sigmoid(self.pgen_encoder(encoder_output) + self.pgen_decoder(unpacked_hiddens))
-
-        one_hot = torch.FloatTensor(encoder_input.size()[0], encoder_input.size()[1], 100).zero_()
-        one_hot.scatter_(2, encoder_input.unsqueeze(2), 1)
-        one_hot = Variable(one_hot)  # BxT_ex91
-
-        if torch.cuda.is_available():
-            one_hot = one_hot.cuda()
-
-        one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
-
-        outputs_regular = self.linear(unpacked_hiddens)
-        outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
-        outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
-
-        outputs = pack(outputs, lengths, batch_first=True)[0]
-        return outputs
-
-    def sample(self, features, encoder_input, encoder_output, states=None):
-        """Samples captions for given image features (Greedy search)."""
-        sampled_ids = []
-        inputs = features.unsqueeze(1)
-        for i in range(20):  # maximum sampling length
-            hiddens, states = self.lstm(inputs, states)  # (batch_size, 1, hidden_size),
-            squeezed_hidden = hiddens.squeeze(1)
-
-            # Creating Mask for Attention
-            mask = encoder_input.eq(0).unsqueeze(1)
-            mask = mask.expand(encoder_input.size()[0], 20, encoder_input.size()[1])  # BxT_dxT_e
-
-            # Calculating Attention Score
-            encoder_output_permuted = encoder_output.permute(0, 2, 1)  # BxHxT_e
-            attn_weights = torch.bmm(self.attn(squeezed_hidden), encoder_output_permuted)  # BxT_dxT_e
-            attn_weights.data.masked_fill_(mask, -float('inf'))
-            attn_weights = self.softmax(attn_weights)
-            encoder_output = torch.bmm(attn_weights, encoder_output)  # BxT_dxH
-
-            # Pointer Generator
-            p_gen = self.sigmoid(self.pgen_encoder(encoder_output) + self.pgen_decoder(squeezed_hidden))
-
-            one_hot = torch.FloatTensor(encoder_input.size()[0], encoder_input.size()[1], 100).zero_()
-            one_hot.scatter_(2, encoder_input.unsqueeze(2), 1)
-            one_hot = Variable(one_hot)  # BxT_ex91
-
-            if torch.cuda.is_available():
-                one_hot = one_hot.cuda()
-
-            one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1],
-                                                                                 -1)
-
-            outputs_regular = self.linear(squeezed_hidden)
-            outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
-            outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
-
-            predicted = outputs.max(1)[1]
-            inputs = self.embed(predicted).unsqueeze(1)
-            predicted = predicted.unsqueeze(1)
-            sampled_ids.append(predicted)
-
-        sampled_ids = torch.cat(sampled_ids, 1)  # (batch_size, 20)
-        return sampled_ids
+    parser.add_argument('--num_epochs', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--num_workers', type=int, default=2)
+    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--seed', type=int, default=123, help='random generator seed')
+    args = parser.parse_args()
+    print(args)
+    main(args)
