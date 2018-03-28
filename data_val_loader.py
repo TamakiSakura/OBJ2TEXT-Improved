@@ -66,7 +66,7 @@ class CocoDataset(data.Dataset):
                     self.widths[key] = layouts['width']
                     self.heights[key] = layouts['height']
 
-            train_visual_features = h5py.File('/home/kwx/OBJ2TEXT-Improved/data/train2014_visual_features.hdf5', 'r')
+            train_visual_features = h5py.File('./data/train2014_visual_features.hdf5', 'r')
             self.visual_features = {}
             for key in train_visual_features.keys():
                 feature = list(train_visual_features[key])
