@@ -10,15 +10,18 @@ from build_vocab import Vocabulary
 from pycocotools.coco import COCO
 import json
 import h5py
+
+
 # import matplotlib.pyplot as plt
 
 
 class CocoDataset(data.Dataset):
     """COCO Custom Dataset compatible with torch.utils.data.DataLoader."""
-    def __init__(self, root, coco_annotation, vocab, MSCOCO_result, coco_detection_result,
-                 transform=None, yolo=True, dummy_object=0):
+
+    def __init__(self, root, coco_annotation, vocab, MSCOCO_result, coco_detection_result, yolo,
+                 transform=None, dummy_object=0):
         """Set the path for images, captions and vocabulary wrapper.
-        
+
         Args:
             root: image directory.
             coco_annotation: coco annotation file path.
@@ -52,8 +55,7 @@ class CocoDataset(data.Dataset):
                     self.widths[key] = layouts['width']
                     self.heights[key] = layouts['height']
 
-            
-            train_visual_features = h5py.File('./data/train2014_visual_features.hdf5', 'r')
+            train_visual_features = h5py.File('/home/kwx/OBJ2TEXT-Improved/data/train2014_visual_features.hdf5', 'r')
             self.visual_features = {}
             for key in train_visual_features.keys():
                 feature = list(train_visual_features[key])
@@ -67,7 +69,7 @@ class CocoDataset(data.Dataset):
             for key in self.coco_obj.anns.keys():
                 img_id = self.coco_obj.anns[key]['image_id']
                 if self.labels.get(img_id):
-                    self.labels[img_id].append(self.coco_obj.anns[key]['category_id']) 
+                    self.labels[img_id].append(self.coco_obj.anns[key]['category_id'])
                     self.locations[img_id].append(self.coco_obj.anns[key]['bbox'])
                 else:
                     self.labels[img_id] = [self.coco_obj.anns[key]['category_id']]
@@ -96,7 +98,7 @@ class CocoDataset(data.Dataset):
             caption = caption[:-1]
         caption.append(vocab('<end>'))
         target = torch.Tensor(caption)
-        
+
         labels = self.labels.get(img_id)
         if labels is None:
             labels = []
@@ -111,17 +113,14 @@ class CocoDataset(data.Dataset):
                 details = self.coco_obj.loadImgs(img_id)[0]
                 locations = encode_location(self.locations[img_id],
                                             details['width'], details['height'])
-                visuals = None
+                visuals = []
         if len(labels) != len(locations):
             raise ValueError("number of labels nust be equal to number of locations")
         if len(labels) == 0:
             labels = [self.dummy_object]
-            locations = encode_location([(0,0,100,100)], 100, 100)
-            if self.yolo:
-                visuals = []
-            else:
-                visuals = None
-        
+            locations = encode_location([(0, 0, 100, 100)], 100, 100)
+            visuals = []
+
         return image, target, labels, locations, visuals
 
     def __len__(self):
@@ -130,12 +129,12 @@ class CocoDataset(data.Dataset):
 
 def collate_fn(data):
     """Creates mini-batch tensors from the list of tuples (image, caption).
-    
-    We should build custom collate_fn rather than using default collate_fn, 
+
+    We should build custom collate_fn rather than using default collate_fn,
     because merging caption (including padding) is not supported in default.
 
     Args:
-        data: list of tuple (image, caption). 
+        data: list of tuple (image, caption).
             - image: torch tensor of shape (3, 256, 256).
             - caption: torch tensor of shape (?); variable length.
 
@@ -169,14 +168,15 @@ def collate_fn(data):
         for j in range(len(location_seq)):
             coords = decode_location(location_seq[j])
             location_seq_data[i, j] = coords
-    
+
     visual_seq_data = torch.zeros(len(visual_seqs), max(label_seq_lengths), 1024)
     for i, visual_seq in enumerate(visual_seqs):
         for j in range(len(visual_seq)):
             visual_seq_data[i, j] = torch.Tensor(visual_seq[j])
- 
+
     # TODO visualize detection results on images
     return images, targets, lengths, label_seq_data, location_seq_data, visual_seq_data, label_seq_lengths
+
 
 def encode_location(bboxs, img_w, img_h):
     locations = []
@@ -191,6 +191,7 @@ def encode_location(bboxs, img_w, img_h):
         locations.append(x * 1e9 + y * 1e6 + w * 1e3 + h)
     return locations
 
+
 def decode_location(location):
     x = location // 1e9
     y = (location % 1e9) // 1e6
@@ -198,10 +199,12 @@ def decode_location(location):
     height = location % 1e3
     return torch.Tensor((x / 608, y / 608, width / 608, height / 608))
 
-def get_loader(root, coco_annotation, vocab, 
-               MSCOCO_result, coco_detection_result, 
-               transform, batch_size, shuffle, num_workers, 
-               yolo=True, dummy_object=0):
+
+def get_loader(root, coco_annotation, vocab,
+               MSCOCO_result, coco_detection_result,
+               transform, batch_size, yolo,
+               shuffle, num_workers,
+               dummy_object=0):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
     # COCO caption dataset
 
@@ -210,16 +213,17 @@ def get_loader(root, coco_annotation, vocab,
                        vocab=vocab,
                        MSCOCO_result=MSCOCO_result,
                        coco_detection_result=coco_detection_result,
+                       yolo=yolo,
                        transform=transform,
-                       dummy_object=dummy_object,
-                       yolo=yolo)
-    
+                       dummy_object=dummy_object
+                       )
+
     # Data loader for COCO dataset
     # This will return (images, captions, lengths) for every iteration.
     # images: tensor of shape (batch_size, 3, 224, 224).
     # captions: tensor of shape (batch_size, padded_length).
     # lengths: list indicating valid length for each caption. length is (batch_size).
-    data_loader = torch.utils.data.DataLoader(dataset=coco, 
+    data_loader = torch.utils.data.DataLoader(dataset=coco,
                                               batch_size=batch_size,
                                               shuffle=shuffle,
                                               num_workers=num_workers,

@@ -43,13 +43,13 @@ def main(args):
         vocab = pickle.load(f)
     Constants.set_constant(vocab)
 
+    yolo = True
     # Build data loader
-    data_loader = get_loader(args.image_dir, args.caption_path, vocab, 
+    data_loader = get_loader(args.image_dir, args.caption_path, vocab,
                              args.MSCOCO_result, args.coco_detection_result,
-                             transform, args.batch_size,
+                             transform, args.batch_size, yolo,
                              shuffle=True, num_workers=args.num_workers,
-                             dummy_object=99,
-                             yolo=True)
+                             dummy_object=99)
     # Build the models
     encoder = EncoderCNN(args.embed_size)
     # the layout encoder hidden state size must be the same with decoder input size
@@ -71,7 +71,7 @@ def main(args):
     # Train the Models
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
-        for i, (images, captions, lengths, 
+        for i, (images, captions, lengths,
                 label_seqs, location_seqs, visual_seqs,
                 layout_lengths) in enumerate(data_loader):
             for idx_length in range(len(lengths)):
@@ -82,8 +82,12 @@ def main(args):
             targets = to_var(captions)
             label_seqs = to_var(label_seqs)
             location_seqs = to_var(location_seqs)
+            if yolo:
+                visual_seqs = to_var(visual_seqs)
+            else:
+                visual_seqs = None
             targets = pack(targets[:,1:], lengths, batch_first=True)[0]
-            
+
             for idx_length in range(len(lengths)):
                 captions[idx_length][lengths[idx_length]] = 0
             captions = to_var(captions)
@@ -91,18 +95,18 @@ def main(args):
             # decoder.zero_grad()
             # layout_encoder.zero_grad()
             # encoder.zero_grad()
-            
+
             # Modify This part for using visual features or not
-             
+
             # vgg_features = encoder(images)
             # visual_seqs = None
-            layout_encoding = layout_encoder(label_seqs, location_seqs, visual_seqs, 
+            layout_encoding = layout_encoder(label_seqs, location_seqs, visual_seqs,
                                              layout_lengths)
             # comb_features = vgg_features + layout_encoding
             comb_features = layout_encoding
-            
+
             outputs = decoder(label_seqs, captions, comb_features, lengths)
-             
+
             loss = criterion(outputs, targets)
             optimizer.zero_grad()
             loss.backward()
@@ -133,18 +137,18 @@ if __name__ == '__main__':
                         help='path for saving trained models')
     parser.add_argument('--crop_size', type=int, default=224,
                         help='size for randomly cropping images')
-    parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
+    parser.add_argument('--vocab_path', type=str, default='/home/kwx/OBJ2TEXT-Improved/data/vocab.pkl',
                         help='path for vocabulary wrapper')
-    parser.add_argument('--image_dir', type=str, default='./data/resized2014',
+    parser.add_argument('--image_dir', type=str, default='/home/kwx/OBJ2TEXT-Improved/data/resized2014',
                         help='directory for resized images')
     parser.add_argument('--caption_path', type=str,
-                        default='./data/annotations/captions_train2014.json',
+                        default='/home/kwx/OBJ2TEXT-Improved/data/annotations/captions_train2014.json',
                         help='path for train annotation json file')
     parser.add_argument('--MSCOCO_result', type=str,
-                        default='./data/annotations/instances_train2014.json',
+                        default='/home/kwx/OBJ2TEXT-Improved/data/annotations/instances_train2014.json',
                         help='path coco object detection result file')
     parser.add_argument('--coco_detection_result', type=str,
-                        default='./data/train2014_layouts.json',
+                        default='/home/kwx/OBJ2TEXT-Improved/data/train2014_layouts.json',
                         help='path coco object detection result file')
     parser.add_argument('--log_step', type=int, default=10,
                         help='step size for prining log info')

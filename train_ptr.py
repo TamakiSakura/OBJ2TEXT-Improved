@@ -52,21 +52,21 @@ def main(args):
     with open(args.vocab_path, 'rb') as f:
         vocab = pickle.load(f)
 
+    yolo = True
     # Build data loader
-    data_loader = get_loader(args.image_dir, args.caption_path, vocab, 
+    data_loader = get_loader(args.image_dir, args.caption_path, vocab,
                              args.MSCOCO_result, args.coco_detection_result,
-                             transform, args.batch_size,
+                             transform, args.batch_size, yolo,
                              shuffle=True, num_workers=args.num_workers,
-                             dummy_object=99,
-                             yolo=False)
+                             dummy_object=99)
 
     # Build the models
     encoder = EncoderCNN(args.embed_size)
-    
+
     # Create the converter
     converter = cat2vocab(data_loader.dataset.coco_obj, vocab)
     converter = to_var(torch.from_numpy(converter).type(torch.FloatTensor))
-     
+
     # the layout encoder hidden state size must be the same with decoder input size
     layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 100, args.num_layers)
     decoder = DecoderRNN(converter,
@@ -87,7 +87,7 @@ def main(args):
     # Train the Models
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
-        for i, (images, captions, lengths, 
+        for i, (images, captions, lengths,
                 label_seqs, location_seqs, visual_seqs,
                 layout_lengths) in enumerate(data_loader):
             # Set mini-batch dataset
@@ -99,17 +99,17 @@ def main(args):
             # decoder.zero_grad()
             # layout_encoder.zero_grad()
             # encoder.zero_grad()
-            
+
             # Modify This part for using visual features or not
-             
+
             # features = encoder(images)
-            layout_encoding, encoder_features = layout_encoder(label_seqs, location_seqs, layout_lengths)
+            layout_encoding, encoder_features = layout_encoder(label_seqs, location_seqs, visual_seqs, layout_lengths)
             # comb_features = features + layout_encoding
             comb_features = layout_encoding
 
-            outputs = decoder(comb_features, captions, lengths, label_seqs, 
+            outputs = decoder(comb_features, captions, lengths, label_seqs,
                               encoder_features)
-            
+
             loss = criterion(outputs, targets)
             optimizer.zero_grad()
             loss.backward()
