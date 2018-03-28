@@ -56,6 +56,7 @@ def main(args):
                              args.MSCOCO_result, args.coco_detection_result,
                              transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
+                             dummy_object=99,
                              yolo=False)
 
     # Build the models
