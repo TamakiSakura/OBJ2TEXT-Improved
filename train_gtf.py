@@ -43,13 +43,14 @@ def main(args):
         vocab = pickle.load(f)
     Constants.set_constant(vocab)
 
+    yolo = True
     # Build data loader
-    data_loader = get_loader(args.image_dir, args.caption_path, vocab, 
+    data_loader = get_loader(args.image_dir, args.caption_path, vocab,
                              args.MSCOCO_result, args.coco_detection_result,
                              transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
                              dummy_object=99,
-                             yolo=True)
+			     yolo=yolo)
     # Build the models
     encoder = EncoderCNN(args.embed_size)
     # the layout encoder hidden state size must be the same with decoder input size
@@ -71,7 +72,7 @@ def main(args):
     # Train the Models
     total_step = len(data_loader)
     for epoch in range(args.num_epochs):
-        for i, (images, captions, lengths, 
+        for i, (images, captions, lengths,
                 label_seqs, location_seqs, visual_seqs,
                 layout_lengths) in enumerate(data_loader):
             for idx_length in range(len(lengths)):
@@ -82,8 +83,12 @@ def main(args):
             targets = to_var(captions)
             label_seqs = to_var(label_seqs)
             location_seqs = to_var(location_seqs)
+            if yolo:
+                visual_seqs = to_var(visual_seqs)
+            else:
+                visual_seqs = None
             targets = pack(targets[:,1:], lengths, batch_first=True)[0]
-            
+
             for idx_length in range(len(lengths)):
                 captions[idx_length][lengths[idx_length]] = 0
             captions = to_var(captions)
@@ -91,18 +96,18 @@ def main(args):
             # decoder.zero_grad()
             # layout_encoder.zero_grad()
             # encoder.zero_grad()
-            
+
             # Modify This part for using visual features or not
-             
+
             # vgg_features = encoder(images)
             # visual_seqs = None
-            layout_encoding = layout_encoder(label_seqs, location_seqs, visual_seqs, 
+            layout_encoding = layout_encoder(label_seqs, location_seqs, visual_seqs,
                                              layout_lengths)
             # comb_features = vgg_features + layout_encoding
             comb_features = layout_encoding
-            
+
             outputs = decoder(label_seqs, captions, comb_features, lengths)
-             
+
             loss = criterion(outputs, targets)
             optimizer.zero_grad()
             loss.backward()
