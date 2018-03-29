@@ -15,8 +15,8 @@ import h5py
 
 class CocoDataset(data.Dataset):
     """COCO Custom Dataset compatible with torch.utils.data.DataLoader."""
-    def __init__(self, root, coco_annotation, vocab, MSCOCO_result, coco_detection_result, yolo,
-                 transform=None, dummy_object=0):
+    def __init__(self, root, coco_annotation, vocab, MSCOCO_result, coco_detection_result, 
+                 transform=None, dummy_object=0, yolo=yolo):
         """Set the path for images, captions and vocabulary wrapper.
 
         Args:
@@ -207,9 +207,10 @@ def decode_location(location):
 
 def get_loader(root, coco_annotation, vocab,
                MSCOCO_result, coco_detection_result,
-               transform, batch_size, yolo,
+               transform, batch_size,
                shuffle, num_workers,
-               dummy_object=0):
+               dummy_object=0,
+               yolo=yolo):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
     # COCO caption dataset
 
@@ -218,9 +219,9 @@ def get_loader(root, coco_annotation, vocab,
                        vocab=vocab,
                        MSCOCO_result= MSCOCO_result,
                        coco_detection_result=coco_detection_result,
-                       yolo=yolo,
                        transform=transform,
-                       dummy_object=dummy_object)
+                       dummy_object=dummy_object,
+                       yolo=yolo)
 
     # Data loader for COCO dataset
     # This will return (images, captions, lengths) for every iteration.
