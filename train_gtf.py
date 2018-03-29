@@ -47,9 +47,10 @@ def main(args):
     # Build data loader
     data_loader = get_loader(args.image_dir, args.caption_path, vocab,
                              args.MSCOCO_result, args.coco_detection_result,
-                             transform, args.batch_size, yolo,
+                             transform, args.batch_size,
                              shuffle=True, num_workers=args.num_workers,
-                             dummy_object=99)
+                             dummy_object=99,
+			     yolo=yolo)
     # Build the models
     encoder = EncoderCNN(args.embed_size)
     # the layout encoder hidden state size must be the same with decoder input size
