@@ -143,7 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_dir', type=str, default='./data/resized2014',
                         help='directory for resized images')
     parser.add_argument('--caption_path', type=str,
-                        default='.data/annotations/captions_train2014.json',
+                        default='./data/annotations/captions_train2014.json',
                         help='path for train annotation json file')
     parser.add_argument('--MSCOCO_result', type=str,
                         default='./data/annotations/instances_train2014.json',
