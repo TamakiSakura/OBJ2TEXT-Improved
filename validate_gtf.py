@@ -38,15 +38,20 @@ def compute_bleu(reference_tokenized, predicted_sentence):
                          smoothing_function = SmoothingFunction().method1)
 
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
+    yolo=False
     # Build data loader
-    data_loader_val = get_loader(args.image_dir_val, args.caption_path_val, vocab, args.coco_detection_result_val,
-                             transform, batch_size,
-                             shuffle=True, num_workers=args.num_workers,
-                             dummy_object=100)
+    data_loader_val = get_loader(args.image_dir_val, args.caption_path_val, vocab, 
+                                 args.MSCOCO_result_val, args.coco_detection_result_val,
+                                 transform, batch_size,
+                                 shuffle=True, num_workers=args.num_workers,
+                                 dummy_object=99,
+                                 yolo=yolo)
     bleu_score_all = 0
     bleu_score_batch = 0
     n = 0
-    for i, (images, captions, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader_val):
+    for i, (images, captions, 
+            label_seqs, location_seqs, 
+            visual_seq_data, layout_lengths) in enumerate(data_loader_val):
         # Set mini-batch dataset
         images = to_var(images)
         label_seqs = to_var(label_seqs)
@@ -55,7 +60,8 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
         # Modify This part for using visual features or not
          
         # features = encoder(images)
-        layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
+        layout_encoding = layout_encoder(label_seqs, location_seqs, visual_seqs, 
+                                         layout_lengths)
         # comb_features = features + layout_encoding
         comb_features = layout_encoding
         sampled_ids = decoder.sample(label_seqs, comb_features)
@@ -101,7 +107,7 @@ def main(args):
     # Build Models
     # encoder = EncoderCNN(args.embed_size)
     # encoder.eval()  # evaluation mode (BN uses moving mean/variance)
-    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 101, args.num_layers)
+    layout_encoder = LayoutEncoder(args.layout_embed_size, args.embed_size, 100, args.num_layers)
     decoder = DecoderRNN(args.embed_size, args.hidden_size, 
                          len(vocab), args.num_layers)
     
@@ -132,22 +138,19 @@ if __name__ == '__main__':
                         help='path for vocabulary wrapper')
     # from train.py
     parser.add_argument('--batch_size', type=int, default=20)
-    parser.add_argument('--image_dir', type=str, default='./data/resized2014',
-                        help='directory for resized images')
     parser.add_argument('--image_dir_val', type=str, default='./data/resized2014_val',
                         help='directory for resized validation images')
-    parser.add_argument('--caption_path', type=str,
-                        default='./data/annotations/captions_train2014.json',
-                        help='path for train annotation json file')
     parser.add_argument('--caption_path_val', type=str,
                         default='./data/annotations/captions_val2014.json',
                         help='path for validation annotation json file')
-    parser.add_argument('--coco_detection_result', type=str,
-                        default='./data/annotations/instances_train2014.json',
+    parser.add_argument('--MSCOCO_result_val', type=str,
+                        default='./data/annotations/instances_val2014.json',
                         help='path coco object detection result file')
     parser.add_argument('--coco_detection_result_val', type=str,
-                        default='./data/annotations/instances_val2014.json',
-                        help='path coco object detection result file for valiadation')
+                        default='./data/val2014_layouts.json',
+                        help='path coco object detection result file')
+            
+
 
     parser.add_argument('--embed_size', type=int , default=256,
                         help='dimension of word embedding vectors')
