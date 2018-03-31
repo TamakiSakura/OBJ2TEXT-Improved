@@ -50,13 +50,17 @@ def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=
     bleu_score_batch = 0
     n = 0
     for i, (images, captions, 
-            label_seqs, location_seqs, 
-            visual_seq_data, layout_lengths) in enumerate(data_loader_val):
+            label_seqs, location_seqs, visual_seqs, 
+            layout_lengths) in enumerate(data_loader_val):
         # Set mini-batch dataset
         images = to_var(images)
         label_seqs = to_var(label_seqs)
         location_seqs = to_var(location_seqs)
-
+        if yolo:
+            visual_seqs = to_var(visual_seqs)
+        else:
+            visual_seqs = None
+                                                                        
         # Modify This part for using visual features or not
          
         # features = encoder(images)
