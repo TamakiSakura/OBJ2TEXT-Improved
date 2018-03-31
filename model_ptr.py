@@ -166,6 +166,8 @@ class DecoderRNN(nn.Module):
 
         sampled_ids = []
         inputs = features.unsqueeze(1)
+
+        # Encoder input
         one_hot = torch.FloatTensor(encoder_input.size()[0], encoder_input.size()[1], 100).zero_()
         one_hot.scatter_(2, encoder_input.unsqueeze(2), 1)
         one_hot = Variable(one_hot) # BxT_ex91
@@ -173,11 +175,11 @@ class DecoderRNN(nn.Module):
         if torch.cuda.is_available():
             one_hot = one_hot.cuda()
         one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
-        
+
         for i in range(20):
 
-            hiddens, states = self.lstm(inputs, states)       #Bx1xhid  
-            squeezed_hidden = hiddens
+            squeezed_hidden, states = self.lstm(inputs, states)       #Bx1xhid  
+
             # Creating Mask for Attention
             mask = encoder_input.eq(0).unsqueeze(1)
             mask = mask.expand(encoder_input.size()[0], 1, encoder_input.size()[1]) # Bx1xT_e
@@ -196,22 +198,17 @@ class DecoderRNN(nn.Module):
             # Pointer Generator
             p_gen = self.sigmoid(self.pgen_encoder(encoder_output_new) + self.pgen_decoder(squeezed_hidden))
 
-
-            
-
             outputs_regular = self.linear(squeezed_hidden)
             outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
-
             outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
 
+            # Get the word with max probability
             outputs = outputs.squeeze(1)
-
             predicted = outputs.max(1)[1]
-
-
             inputs = self.embed(predicted).unsqueeze(1)
             predicted = predicted.unsqueeze(1)
 
+            # Add to the prediction list.
             sampled_ids.append(predicted)
 
         sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
