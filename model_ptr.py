@@ -132,6 +132,8 @@ class DecoderRNN(nn.Module):
         mask = encoder_input.eq(0).unsqueeze(1)
         mask = mask.expand(encoder_input.size()[0], captions.size()[1], encoder_input.size()[1]) # BxT_dxT_e
 
+        if torch.cuda.is_available():
+            mask = mask.cuda()
         # Calculating Attention Score
         unpacked_hiddens = unpack(hiddens, batch_first=True)[0]  # BxT_dxH
         encoder_output_permuted = encoder_output.permute(0,2,1) # BxHxT_e
@@ -159,17 +161,56 @@ class DecoderRNN(nn.Module):
         outputs = pack(outputs, lengths, batch_first=True)[0] 
         return outputs
     
-    def sample(self, features, states=None):
+    def sample(self, features, encoder_input, encoder_output,states=None):
         """Samples captions for given image features (Greedy search)."""
+
         sampled_ids = []
         inputs = features.unsqueeze(1)
-        for i in range(20):                                      # maximum sampling length
-            hiddens, states = self.lstm(inputs, states)          # (batch_size, 1, hidden_size), 
-            outputs = self.linear(hiddens.squeeze(1))            # (batch_size, vocab_size)
+        for i in range(20):
+
+            hiddens, states = self.lstm(inputs, states)       #Bx1xhid  
+            squeezed_hidden = hiddens
+            # Creating Mask for Attention
+            mask = encoder_input.eq(0).unsqueeze(1)
+            mask = mask.expand(encoder_input.size()[0], 1, encoder_input.size()[1]) # Bx1xT_e
+
+
+            # Calculating Attention Score
+            encoder_output_permuted = encoder_output.permute(0,2,1) # BxHxT_e
+            attn_weights = torch.bmm(self.attn(squeezed_hidden), encoder_output_permuted) #Bx1xT_e
+ 
+            attn_weights.data.masked_fill_(mask, -float('inf')) 
+            attn_weights = self.softmax(attn_weights) 
+            encoder_output_new = torch.bmm(attn_weights, encoder_output) # Bx1xH
+
+
+            # Pointer Generator
+            p_gen = self.sigmoid(self.pgen_encoder(encoder_output_new) + self.pgen_decoder(squeezed_hidden))
+
+            one_hot = torch.FloatTensor(encoder_input.size()[0], encoder_input.size()[1], 100).zero_()
+            one_hot.scatter_(2, encoder_input.unsqueeze(2), 1)
+            one_hot = Variable(one_hot) # BxT_ex91
+
+            if torch.cuda.is_available():
+                one_hot = one_hot.cuda()
+            
+            one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
+
+            outputs_regular = self.linear(squeezed_hidden)
+            outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
+
+            outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
+
+            outputs = outputs.squeeze(1)
+
             predicted = outputs.max(1)[1]
+
+
             inputs = self.embed(predicted).unsqueeze(1)
             predicted = predicted.unsqueeze(1)
+
             sampled_ids.append(predicted)
 
         sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
+        print(sampled_ids)
         return sampled_ids

@@ -136,3 +136,25 @@ class DecoderRNN(nn.Module):
 
         sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
         return sampled_ids
+
+    def sample_beam_search(self, features, states=None):
+        """Samples captions for given image features (BEAM search).
+            TODO    """
+
+        sampled_ids = []
+        inputs = features.unsqueeze(1)
+        softmax = nn.LogSoftmax()
+        for i in range(20):                                      # maximum sampling length
+            hiddens, states = self.lstm(inputs, states)          # (batch_size, 1, hidden_size), 
+            outputs = self.linear(hiddens.squeeze(1))            # (batch_size, vocab_size)
+            outputs = softmax(outputs)
+            predicted = outputs.topk(2)
+            print(predicted)
+            break
+            predicted = outputs.max(1)[0]
+            inputs = self.embed(predicted).unsqueeze(1)
+            predicted = predicted.unsqueeze(1)
+            sampled_ids.append(predicted)
+
+        sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
+        return sampled_ids
