@@ -38,17 +38,26 @@ def compute_bleu(reference_tokenized, predicted_sentence):
                          smoothing_function = SmoothingFunction().method1)
 
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
+    yolo=False
     # Build data loader
     data_loader_val = get_loader(args.image_dir_val, args.caption_path_val, vocab, args.coco_detection_result_val,
-                             transform, batch_size,
-                             shuffle=True, num_workers=args.num_workers)
+                                 transform, batch_size,
+                                 shuffle=True, num_workers=args.num_workers,
+                                 dummy_object=99,
+                                 yolo=yolo)
     bleu_score_all = 0
     bleu_score_batch = 0
     n = 0
-    for i, (images, captions, label_seqs, location_seqs, layout_lengths) in enumerate(data_loader_val):
+    for i, (images, captions, 
+            label_seqs, location_seqs, visual_seqs, 
+            layout_lengths) in enumerate(data_loader_val):
         # Set mini-batch dataset
         images = to_var(images)
         # Modify This part for using visual features or not
+        if yolo:
+            visual_seqs = to_var(visual-ses)
+        else:
+            visual_seqs = None
          
         # features = encoder(images)
         layout_encoding = layout_encoder(label_seqs, location_seqs, layout_lengths)
