@@ -61,7 +61,7 @@ def main(args):
                              yolo=False)
 
     # Build the models
-    encoder = EncoderCNN(args.embed_size)
+    # encoder = EncoderCNN(args.embed_size)
     
     # Create the converter
     converter = cat2vocab(data_loader.dataset.coco_obj, vocab)
@@ -74,14 +74,15 @@ def main(args):
                          len(vocab), args.num_layers)
 
     if torch.cuda.is_available():
-        encoder.cuda()
+        # encoder.cuda()
         layout_encoder.cuda()
         decoder.cuda()
 
     # Loss and Optimizer
     criterion = nn.CrossEntropyLoss()
-    params = list(layout_encoder.parameters()) + list(decoder.parameters()) + \
-	     list(encoder.linear.parameters()) + list(encoder.bn.parameters())
+    params = list(layout_encoder.parameters()) + list(decoder.parameters())
+    # params = list(layout_encoder.parameters()) + list(decoder.parameters()) + \
+	   #   list(encoder.linear.parameters()) + list(encoder.bn.parameters())
     optimizer = torch.optim.Adam(params, lr=args.learning_rate)
 
     # Train the Models
@@ -125,11 +126,11 @@ def main(args):
             if (i + 1) % args.save_step == 0:
                 torch.save(decoder.state_dict(),
                            os.path.join(args.model_path,
-                                        'decoder-%d-%d.pkl' % (epoch + 1, i + 1)))
+                                        'ptr_decoder-%d-%d.pkl' % (epoch + 1, i + 1)))
 
                 torch.save(layout_encoder.state_dict(),
                            os.path.join(args.model_path,
-                                        'layout_encoding-%d-%d.pkl' % (epoch + 1, i + 1)))
+                                        'ptr_layout_encoding-%d-%d.pkl' % (epoch + 1, i + 1)))
 
 
 
