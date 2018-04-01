@@ -40,7 +40,8 @@ def compute_bleu(reference_tokenized, predicted_sentence):
 def validation(layout_encoder,decoder, args,vocab,transform, batch_size,encoder=None):
     yolo=False
     # Build data loader
-    data_loader_val = get_loader(args.image_dir_val, args.caption_path_val, vocab, args.coco_detection_result_val,
+    data_loader_val = get_loader(args.image_dir_val, args.caption_path_val, vocab, 
+                                 args.MSCOCO_result_val, args.coco_detection_result_val,
                                  transform, batch_size,
                                  shuffle=True, num_workers=args.num_workers,
                                  dummy_object=99,
@@ -137,18 +138,13 @@ if __name__ == '__main__':
                         help='path for vocabulary wrapper')
     # from train.py
     parser.add_argument('--batch_size', type=int, default=20)
-    parser.add_argument('--image_dir', type=str, default='./data/resized2014',
-                        help='directory for resized images')
     parser.add_argument('--image_dir_val', type=str, default='./data/resized2014_val',
                         help='directory for resized validation images')
-    parser.add_argument('--caption_path', type=str,
-                        default='./data/annotations/captions_train2014.json',
-                        help='path for train annotation json file')
     parser.add_argument('--caption_path_val', type=str,
                         default='./data/annotations/captions_val2014.json',
                         help='path for validation annotation json file')
-    parser.add_argument('--coco_detection_result', type=str,
-                        default='./data/annotations/instances_train2014.json',
+    parser.add_argument('--MSCOCO_result_val', type=str,
+                        default='./data/annotations/instances_val2014.json',
                         help='path coco object detection result file')
     parser.add_argument('--coco_detection_result_val', type=str,
                         default='./data/annotations/instances_val2014.json',
