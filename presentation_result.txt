@@ -1,0 +1,70 @@
+#0 COCO_val2014_000000441695.jpg pointer
+bsl--predict: a large passenger jet sitting on top of an airport tarmac
+ptr--predict: a group of airplanes are parked on the runway
+gtf--predict: a large white airplane is parked on a runway
+reference: several planes lined up on a runway during a cloudy day
+
+
+#84 COCO_val2014_000000487239.jpg possibly gtf
+bsl--predict: a man riding on the back of a horse drawn carriage
+gtf--predict: a group of people riding on the back of horses
+ptr--predict: a man riding a horse drawn carriage down a street
+reference: people riding horseback on a mountain during a beautiful day
+
+
+#967 COCO_val2014_000000311909.jpg better bias for gtf and ptr
+bsl--predict: a bus is parked in the grass near a building
+gtf--predict: a large bus parked on a city street
+ptr--predict: a school bus parked in a parking lot
+reference: a white bus that has a 41 crosstown sign on the front
+
+
+
+#581 COCO_val2014_000000337274.jpg less information of color (ptr and baseline has incorrect color, gtf doesn't have color)
+bsl--predict: a dog with a red umbrella sitting on the ground
+gtf--predict: a dog is sitting under a umbrella in the sun
+ptr--predict: a dog with a blue collar is sitting on a chair
+reference: a dog with a umbrella that is pointing to the sky
+
+
+
+#719 COCO_val2014_000000082673.jpg
+baseline--predict: a car is driving down a street with a car on the road
+gtf--predict: a car is parked in front of a bus
+ptr--predict: a car parked next to a car on a street
+reference: a small car is parked in front of a scooter
+
+
+
+#159 COCO_val2014_000000007977.jpg
+baseline--predict: a man riding a skateboard down the side of a ramp
+gtf--predict: a man is doing a trick on a skateboard
+ptr--predict: a man riding a skateboard down a ramp
+reference: a young man performing tricks on a skateboard
+
+
+
+#205 COCO_val2014_000000295956.jpg
+bsl--predict: a man holding a tennis racquet on a tennis court
+ptr--predict: two women playing tennis on a tennis court
+gtf--predict: a tennis player is getting ready to hit a tennis ball
+reference: two girls play a game of tennis on a sunny day
+
+
+#465 COCO_val2014_000000515777.jpg
+bsl--predict: a man sitting on a couch with a dog and a remote
+ptr--predict: a woman sitting on a couch with two dogs
+gtf--predict: a man and dog sitting on a couch next to a dog
+reference: a woman laying on a couch with three dogs snuggling
+
+#615 COCO_val2014_000000133611.jpg
+bsl--predict: a boat with a large number of <unk> on it
+ptr--predict: a boat in the water with people in the background
+gtf--predict: a small boat is docked on the water
+reference: a white yacht going down a river
+
+
+
+
+
+
