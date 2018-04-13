@@ -18,6 +18,7 @@ except ImportError:
 
 
 # data loader
+
 imdb = MSCOCODataset(cfg.imdb_train, cfg.DATA_DIR, cfg.train_batch_size,
                   yolo_utils.preprocess_train, processes=2, shuffle=True,
                   dst_size=cfg.multi_scale_inp_size)
@@ -66,6 +67,7 @@ cnt = 0
 t = Timer()
 step_cnt = 0
 size_index = 0
+
 for step in range(start_epoch * imdb.batch_per_epoch,
                   cfg.max_epoch * imdb.batch_per_epoch):
     t.tic()
@@ -132,5 +134,14 @@ for step in range(start_epoch * imdb.batch_per_epoch,
         net_utils.save_net(save_name, net)
         print(('save model: {}'.format(save_name)))
         step_cnt = 0
+
+    del batch
+    del im_data
+    del im
+    del gt_boxes
+    del gt_classes
+    del dontcare
+    del orgin_im
+    del loss
 
 imdb.close()
