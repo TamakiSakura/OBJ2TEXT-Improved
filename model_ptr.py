@@ -4,7 +4,7 @@ import torchvision.models as models
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.autograd import Variable
-
+import torch.nn.functional as f
 
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size):
@@ -137,9 +137,9 @@ class DecoderRNN(nn.Module):
         # Calculating Attention Score
         unpacked_hiddens = unpack(hiddens, batch_first=True)[0]  # BxT_dxH
         encoder_output_permuted = encoder_output.permute(0,2,1) # BxHxT_e
-        attn_weights = torch.bmm(self.attn(unpacked_hiddens), encoder_output_permuted) #BxT_dxT_e
-        attn_weights.data.masked_fill_(mask, -float('inf')) 
-        attn_weights = self.softmax(attn_weights) 
+        attn_weights_raw = torch.bmm(self.attn(unpacked_hiddens), encoder_output_permuted) #BxT_dxT_e
+        attn_weights_raw.data.masked_fill_(mask, -float('inf')) 
+        attn_weights = self.softmax(attn_weights_raw) 
         encoder_output = torch.bmm(attn_weights, encoder_output) # BxT_dxH
 
         # Pointer Generator
@@ -155,7 +155,8 @@ class DecoderRNN(nn.Module):
         one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
 
         outputs_regular = self.linear(unpacked_hiddens)
-        outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
+        attn_weights_raw = torch.clamp(attn_weights_raw,min=-1000,max=1000)
+        outputs_pointer = torch.bmm(attn_weights_raw, one_hot_vocab)
         outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
         
         outputs = pack(outputs, lengths, batch_first=True)[0] 
@@ -175,7 +176,7 @@ class DecoderRNN(nn.Module):
         if torch.cuda.is_available():
             one_hot = one_hot.cuda()
         one_hot_vocab = torch.mm(one_hot.view(-1, 100), self.converter).view(one_hot.size()[0], one_hot.size()[1], -1)
-
+        
         for i in range(20):
 
             squeezed_hidden, states = self.lstm(inputs, states)       #Bx1xhid  
@@ -188,10 +189,10 @@ class DecoderRNN(nn.Module):
 
             # Calculating Attention Score
             encoder_output_permuted = encoder_output.permute(0,2,1) # BxHxT_e
-            attn_weights = torch.bmm(self.attn(squeezed_hidden), encoder_output_permuted) #Bx1xT_e
+            attn_weights_raw = torch.bmm(self.attn(squeezed_hidden), encoder_output_permuted) #Bx1xT_e
  
-            attn_weights.data.masked_fill_(mask, -float('inf')) 
-            attn_weights = self.softmax(attn_weights) 
+            attn_weights_raw.data.masked_fill_(mask, -float('inf')) 
+            attn_weights = self.softmax(attn_weights_raw) 
             encoder_output_new = torch.bmm(attn_weights, encoder_output) # Bx1xH
 
 
@@ -199,16 +200,15 @@ class DecoderRNN(nn.Module):
             p_gen = self.sigmoid(self.pgen_encoder(encoder_output_new) + self.pgen_decoder(squeezed_hidden))
 
             outputs_regular = self.linear(squeezed_hidden)
-            outputs_pointer = torch.bmm(attn_weights, one_hot_vocab)
+            attn_weights_raw = torch.clamp(attn_weights_raw,min=-1000,max=1000)
+            outputs_pointer = torch.bmm(attn_weights_raw, one_hot_vocab)
             outputs = p_gen * outputs_regular + (1 - p_gen) * outputs_pointer
-
+            
             # Get the word with max probability
             outputs = outputs.squeeze(1)
             predicted = outputs.max(1)[1]
             inputs = self.embed(predicted).unsqueeze(1)
             predicted = predicted.unsqueeze(1)
-
-            # Add to the prediction list.
             sampled_ids.append(predicted)
 
         sampled_ids = torch.cat(sampled_ids, 1)                  # (batch_size, 20)
