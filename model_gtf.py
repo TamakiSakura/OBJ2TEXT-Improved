@@ -86,11 +86,13 @@ class LayoutEncoder(nn.Module):
 
         enc_slf_attn_mask = get_attn_padding_mask(label_seqs,
                                                   label_seqs)
+        enc_outputs = []
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(
                 enc_output, slf_attn_mask=enc_slf_attn_mask)
+            enc_outputs.append(enc_output)
 
-        return enc_output
+        return enc_outputs
 
 
 class DecoderRNN(nn.Module):
@@ -123,7 +125,7 @@ class DecoderRNN(nn.Module):
         self.linear.weight.data.uniform_(-0.1, 0.1)
         self.linear.bias.data.fill_(0)
 
-    def forward(self, src_seq, tgt_seq, enc_output, length, flat=True):
+    def forward(self, src_seq, tgt_seq, enc_outputs, length, flat=True):
         """Decode the input into sentence"""
         # Word embedding look up
         dec_input = self.tgt_word_emb(tgt_seq)
@@ -147,11 +149,13 @@ class DecoderRNN(nn.Module):
         dec_enc_attn_pad_mask = get_attn_padding_mask(tgt_seq, src_seq)
 
         dec_output = dec_input
+        i = 0
         for dec_layer in self.layer_stack:
             dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
-                dec_output, enc_output,
+                dec_output, enc_outputs[i],
                 slf_attn_mask=dec_slf_attn_mask,
                 dec_enc_attn_mask=dec_enc_attn_pad_mask)
+            i += 1
 
         output = self.linear(dec_output)
         if flat:
@@ -159,7 +163,7 @@ class DecoderRNN(nn.Module):
 
         return output
 
-    def sample(self, src_seq, enc_output):
+    def sample(self, src_seq, enc_outputs):
         """Samples captions for given image features (Greedy search)."""
         beam_size = 1
         batch_size = src_seq.size(0)
@@ -171,10 +175,12 @@ class DecoderRNN(nn.Module):
         src_seq = Variable(
             src_seq.data.repeat(1, beam_size).view(
                 src_seq.size(0) * beam_size, src_seq.size(1)))
-
-        enc_output = Variable(
-            enc_output.data.repeat(1, beam_size, 1).view(
-                enc_output.size(0) * beam_size, enc_output.size(1), enc_output.size(2)))
+        
+        for i in range(len(enc_outputs)):
+            enc_output = enc_outputs[i]
+            enc_outputs[i] = Variable(
+                enc_output.data.repeat(1, beam_size, 1).view(
+                    enc_output.size(0) * beam_size, enc_output.size(1), enc_output.size(2)))
 
         # --- Prepare beams
         beams = [Beam(beam_size, torch.cuda.is_available()) for _ in range(batch_size)]
@@ -200,7 +206,7 @@ class DecoderRNN(nn.Module):
 
             # -- Decoding -- #
             dec_output = self(
-                src_seq, dec_partial_seq, enc_output,
+                src_seq, dec_partial_seq, enc_outputs,
                 [len_dec_seq] * n_remaining_sents * beam_size, False)
             dec_output = dec_output[:, -1, :]  # (batch * beam) * d_model
             out = self.softmax(dec_output)
@@ -261,7 +267,9 @@ class DecoderRNN(nn.Module):
                 return Variable(active_enc_info_data, volatile=True)
 
             src_seq = update_active_seq(src_seq, active_inst_idxs)
-            enc_output = update_active_enc_info(enc_output, active_inst_idxs)
+            
+            for j in range(len(enc_outputs)):
+                enc_outputs[j] = update_active_enc_info(enc_outputs[j], active_inst_idxs)
 
             # - update the remaining size
             n_remaining_sents = len(active_inst_idxs)
